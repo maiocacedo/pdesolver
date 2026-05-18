@@ -1,10 +1,9 @@
-from tabnanny import verbose
 import time
 import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 import scipy.sparse as sp_sparse
-from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import spsolve, splu
 
 from .solver_base import (
     compile_equations, extract_linear_structure, detect_linearity,
@@ -23,7 +22,8 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
        nonlinear_method='newton', tol_nl=1e-8, max_iter_nl=20,
        dirichlet_constraints=None,
        neumann_constraints=None,
-       verbose=False):
+       verbose=False,
+       is_linear=None):
     dt = tf / nt
     n  = len(d_vars)
     u  = np.array(ic, dtype=np.float64).flatten()
@@ -86,23 +86,30 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
 
     final_list, use_groups, n_elements = make_history(n_funcs, n)
 
-    funcs = compile_equations(flat_list, d_vars)
+    funcs = compile_equations(flat_list, d_vars, verbose=verbose)
 
     overwrite_indices = list(dirichlet_constraints.keys()) + list(neumann_constraints.keys())
-    is_linear, L = detect_linearity(funcs, n,
-                                    dirichlet_indices=overwrite_indices)
+    if is_linear is None:
+        is_linear, L = detect_linearity(funcs, n, verbose=verbose,
+                                        dirichlet_indices=overwrite_indices)
+    else:
+        L = None
 
     I = sp_sparse.eye(n, format='csr')
 
     if is_linear:
-        _, fonte_func = extract_linear_structure(funcs, n, verbose=False)
+        L, fonte_func = extract_linear_structure(funcs, n, verbose=verbose, L=L)
         A_impl = I - (dt / 2.0) * L
         A_expl = I + (dt / 2.0) * L
+        t_lu = time.time()
+        lu_impl = splu(A_impl.tocsc())
+        if verbose:
+            print(f"  [CN] Pré-fatoração LU (A_impl): {time.time()-t_lu:.3f}s")
     else:
         if verbose:
             print(f"  [CN] EDP nao-linear detectada - usando {nonlinear_method.upper()} "
                   f"(tol={tol_nl:.0e}, max_iter={max_iter_nl})")
-        _, fonte_func = extract_linear_structure(funcs, n, verbose=False)
+        _, fonte_func = extract_linear_structure(funcs, n, verbose=verbose)
 
     save_to_history(u, final_list, use_groups, n_funcs, n_elements)
 
@@ -117,9 +124,8 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
             f_n  = fonte_func(tempo_atual)
             f_n1 = fonte_func(tempo_proximo)
             rhs  = A_expl.dot(u) + (dt / 2.0) * (f_n + f_n1)
-            u    = spsolve(A_impl, rhs)
+            u    = lu_impl.solve(rhs)
             u    = _apply_bcs(u, tempo_proximo)
-
         else:
             F_n      = eval_F(funcs, tempo_atual, u)
             rhs_hist = u + (dt / 2.0) * F_n

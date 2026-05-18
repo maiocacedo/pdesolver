@@ -1,7 +1,6 @@
 from typing import List
 from .boundary_base import BoundaryCondition
 
-
 class NeumannBC(BoundaryCondition):
 
     def __init__(self, bd_func: str):

@@ -3,7 +3,7 @@ import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 import scipy.sparse as sp_sparse
-from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import spsolve, splu
 
 from .solver_base import (
     compile_equations, extract_linear_structure, detect_linearity,
@@ -21,8 +21,9 @@ def _make_bc_lambda(expr_str: str):
 def bdf2(flat_list, d_vars, tf, nt, ic, n_funcs=None,
          nonlinear_method='newton', tol_nl=1e-8, max_iter_nl=20,
          dirichlet_constraints=None,
-         neumann_constraints=None, 
-         verbose=False):
+         neumann_constraints=None,
+         verbose=False,
+         is_linear=None):
     dt = tf / nt
     n  = len(d_vars)
     u  = np.array(ic, dtype=np.float64).flatten()
@@ -91,23 +92,31 @@ def bdf2(flat_list, d_vars, tf, nt, ic, n_funcs=None,
 
     final_list, use_groups, n_elements = make_history(n_funcs, n)
 
-    funcs = compile_equations(flat_list, d_vars)
+    funcs = compile_equations(flat_list, d_vars, verbose=verbose)
 
     overwrite_indices = list(dirichlet_constraints.keys()) + list(neumann_constraints.keys())
-    is_linear, L = detect_linearity(funcs, n,
-                                    dirichlet_indices=overwrite_indices)
+    if is_linear is None:
+        is_linear, L = detect_linearity(funcs, n, verbose=verbose,
+                                        dirichlet_indices=overwrite_indices)
+    else:
+        L = None
 
     I = sp_sparse.eye(n, format='csr')
 
     if is_linear:
-        _, fonte_func = extract_linear_structure(funcs, n, verbose=False)
+        L, fonte_func = extract_linear_structure(funcs, n, verbose=verbose, L=L)
         A_bdf1 = I - dt * L
         A_bdf2 = I - (2.0 * dt / 3.0) * L
+        t_lu = time.time()
+        lu_bdf1 = splu(A_bdf1.tocsc())
+        lu_bdf2 = splu(A_bdf2.tocsc())
+        if verbose:
+            print(f"  [BDF2] Pré-fatoração LU (A_bdf1, A_bdf2): {time.time()-t_lu:.3f}s")
     else:
         if verbose:
             print(f"  [BDF2] EDP nao-linear detectada - usando {nonlinear_method.upper()} "
                   f"(tol={tol_nl:.0e}, max_iter={max_iter_nl})")
-        _, fonte_func = extract_linear_structure(funcs, n, verbose=False)
+        _, fonte_func = extract_linear_structure(funcs, n, verbose=verbose)
 
     save_to_history(u, final_list, use_groups, n_funcs, n_elements)
 
@@ -118,7 +127,7 @@ def bdf2(flat_list, d_vars, tf, nt, ic, n_funcs=None,
     if is_linear:
         rhs_1  = u + dt * fonte_func(tempo_1)
         u_prev = u.copy()
-        u      = spsolve(A_bdf1, rhs_1)
+        u      = lu_bdf1.solve(rhs_1)
         u      = _apply_bcs(u, tempo_1)
     else:
         if nonlinear_method == 'newton':
@@ -146,7 +155,7 @@ def bdf2(flat_list, d_vars, tf, nt, ic, n_funcs=None,
         if is_linear:
             rhs_vec = rhs_hist + (2.0 * dt / 3.0) * fonte_func(tempo_n1)
             u_prev  = u.copy()
-            u       = spsolve(A_bdf2, rhs_vec)
+            u       = lu_bdf2.solve(rhs_vec)
             u       = _apply_bcs(u, tempo_n1)
         else:
             if nonlinear_method == 'newton':

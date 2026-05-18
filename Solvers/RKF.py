@@ -85,7 +85,7 @@ def SERKF45_cuda(
     max_steps=10_000_000,
     dirichlet_constraints=None,
     neumann_constraints=None,
-    verbose=False
+    verbose=False,
 ):
     if rtol is None:
         rtol = tol
@@ -131,7 +131,7 @@ def SERKF45_cuda(
         if h_neumann is None:
             return
         two_h = 2.0 * h_neumann
-        
+
         for idx, info in neumann_constraints.items():
             f = neumann_lambdas[idx]
             f_val = float(f(t_val, info['x'], info['y']))
@@ -154,15 +154,17 @@ def SERKF45_cuda(
     if m == 0:
         raise ValueError("Lista de EDOs vazia.")
 
-    F_tuple = sp.lambdify((t_sym, *y_syms), tuple(exprs), modules=[CUPY_MAP, cp])
+    y_indexed = sp.IndexedBase('y')
+    sub_map = {sym: y_indexed[k] for k, sym in enumerate(y_syms)}
+    exprs_idx = [e.xreplace(sub_map) for e in exprs]
 
-    _out_buf = cp.empty(m, dtype=cp.float64)
+    F_vec = sp.lambdify((t_sym, y_indexed),
+                        sp.Matrix(exprs_idx),
+                        modules=[CUPY_MAP, cp],
+                        cse=True)
 
     def F_all(t_scalar, y_vec):
-        out = F_tuple(t_scalar, *[y_vec[k] for k in range(m)])
-        for k in range(m):
-            _out_buf[k] = out[k]
-        return _out_buf
+        return F_vec(t_scalar, y_vec).reshape(m)
 
     dtype = cp.float64
     print(f"Integrando {m} EDOs com SERKF45 (CUDA)...")
@@ -198,7 +200,6 @@ def SERKF45_cuda(
     t1 = dtype(float(xn))
     h  = clamp_h(h, t, t1, dt_max)
 
-    
     c2, c3, c4, c5, c6         = 1/4, 3/8, 12/13, 1.0, 1/2
     a21                        = 1/4
     a31, a32                   = 3/32, 9/32
