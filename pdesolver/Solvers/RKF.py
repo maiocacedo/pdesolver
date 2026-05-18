@@ -8,7 +8,7 @@ import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 
-from Auxs.FuncAux import symbol_references
+from ..Auxs.FuncAux import symbol_references
 
 def _fix_cupy_path():
     if sys.platform != 'win32':
@@ -47,7 +47,13 @@ def _fix_cupy_path():
 
 
 _fix_cupy_path()
-import cupy as cp
+
+try:
+    import cupy as cp
+    _CUPY_AVAILABLE = True
+except ImportError:
+    cp = None
+    _CUPY_AVAILABLE = False
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower()
@@ -61,16 +67,17 @@ def get_short_path(path):
     ctypes.windll.kernel32.GetShortPathNameW(path, buf, 512)
     return buf.value or path
 
-CUPY_MAP = {
-    'sin':   cp.sin,   'cos':   cp.cos,   'tan':   cp.tan,
-    'asin':  cp.arcsin, 'acos': cp.arccos, 'atan':  cp.arctan, 'atan2': cp.arctan2,
-    'sinh':  cp.sinh,  'cosh':  cp.cosh,  'tanh':  cp.tanh,
-    'exp':   cp.exp,   'log':   cp.log,   'sqrt':  cp.sqrt,
-    'Abs':   cp.abs,   'sign':  cp.sign,
-    'Max':   cp.maximum, 'Min': cp.minimum, 'mod':  cp.mod,
-    'floor': cp.floor, 'ceil':  cp.ceil,
-    'sech':  lambda x: 1.0 / cp.cosh(x),
-}
+def _get_cupy_map():
+    return {
+        'sin':   cp.sin,   'cos':   cp.cos,   'tan':   cp.tan,
+        'asin':  cp.arcsin, 'acos': cp.arccos, 'atan':  cp.arctan, 'atan2': cp.arctan2,
+        'sinh':  cp.sinh,  'cosh':  cp.cosh,  'tanh':  cp.tanh,
+        'exp':   cp.exp,   'log':   cp.log,   'sqrt':  cp.sqrt,
+        'Abs':   cp.abs,   'sign':  cp.sign,
+        'Max':   cp.maximum, 'Min': cp.minimum, 'mod':  cp.mod,
+        'floor': cp.floor, 'ceil':  cp.ceil,
+        'sech':  lambda x: 1.0 / cp.cosh(x),
+    }
 
 
 def _make_bc_lambda(expr_str: str):
@@ -87,8 +94,16 @@ def SERKF45_cuda(
     neumann_constraints=None,
     verbose=False,
 ):
+    if not _CUPY_AVAILABLE:
+        raise RuntimeError(
+            "O método 'RKF' requer CuPy (GPU/CUDA). "
+            "Instale com: pip install cupy-cuda12x  (ajuste a versão do CUDA)"
+        )
+
     if rtol is None:
         rtol = tol
+
+    CUPY_MAP = _get_cupy_map()
 
     dirichlet_constraints = dirichlet_constraints or {}
     neumann_constraints   = neumann_constraints   or {}
