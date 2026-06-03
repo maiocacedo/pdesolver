@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdesolver"
-version = "0.1.1"
-description = "Solver simbólico para equações diferenciais parciais (PDEs) com discretização por diferenças finitas"
-readme = "README.md"
+version = "0.1.2"
+description = "Symbolic PDE solver using finite difference discretization"
+readme = {file = "README.md", content-type = "text/markdown"}
 license = { text = "MIT" }
 requires-python = ">=3.9"
 keywords = ["pde", "differential equations", "numerical methods", "finite differences", "solver"]

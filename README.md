@@ -142,20 +142,20 @@ class PDE:
 For **1D** problems, only `west` (left) and `east` (right) boundaries are used:
 
 ```
-west ←——————— domain ———————→ east
-x = x_min                    x = x_max
+west  ----------- domain -----------  east
+x = x_min                           x = x_max
 ```
 
 For **2D** problems, all four sides are used:
 
 ```
-              north (y = y_max)
-         ┌─────────────────────┐
-         │                     │
-  west   │       domain        │  east
-(x=x_min)│                     │(x=x_max)
-         └─────────────────────┘
-              south (y = y_min)
+               north (y = y_max)
+          +------------------------+
+          |                        |
+  west    |        domain          |  east
+(x=x_min) |                        | (x=x_max)
+          +------------------------+
+               south (y = y_min)
 ```
 
 ---
@@ -546,4 +546,4 @@ sistema.visualize(mode='plot1d_all', func_idx=1, tf=5.0)  # D
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](https://github.com/maiocacedo/PDESsolver/blob/main/LICENSE) for details.
