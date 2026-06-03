@@ -114,10 +114,11 @@ def plot1d_all(historico, x, funcs, func_idx, **kwargs):
 
 
 def heatmap1d(historico, x, funcs, pdes, func_idx, **kwargs):
+    """Heatmap x (eixo y) vs t (eixo x) — evolução espaciotemporal completa."""
     cmap    = kwargs.get('cmap', 'viridis')
     tf_real = kwargs.get('tf', None)
 
-    matriz   = np.array(historico[func_idx])
+    matriz   = np.array(historico[func_idx])  # (n_passos, nx)
     n_passos = matriz.shape[0]
     t_max    = tf_real if tf_real is not None else n_passos - 1
     a, b     = pdes[0].ivar_boundary[0]

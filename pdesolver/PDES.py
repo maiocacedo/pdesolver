@@ -4,14 +4,14 @@ import matplotlib
 import numpy as np
 import sympy as sp
 
-import Solvers.RKF as SERKF45
-from Auxs.PDESEncoder import PDESEncoder
-from Auxs.Visualize import visualize as _visualize
-from Disc.Disc import df
-from PDE import PDE
-from Solvers.bdf2 import bdf2
-from Solvers.CN import cn
-from Solvers.solver_base import detect_linearity_symbolic
+from .Solvers import RKF as SERKF45
+from .Auxs.PDESEncoder import PDESEncoder
+from .Auxs.Visualize import visualize as _visualize
+from .Disc.Disc import df
+from .PDE import PDE
+from .Solvers.bdf2 import bdf2
+from .Solvers.CN import cn
+from .Solvers.solver_base import detect_linearity_symbolic
 
 matplotlib.use("TkAgg")
 
