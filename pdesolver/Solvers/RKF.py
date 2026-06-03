@@ -8,7 +8,7 @@ import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 
-from Auxs.FuncAux import symbol_references
+from ..Auxs.FuncAux import symbol_references
 
 
 def _fix_cupy_path():
