@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdesolver"
-version = "0.1.4"
+version = "0.1.5"
 description = "Symbolic PDE solver using finite difference discretization"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = { text = "MIT" }
