@@ -1,11 +1,31 @@
-
 import numpy as np
 import matplotlib
-try:
-    if matplotlib.get_backend().lower() == "agg":
-        matplotlib.use("TkAgg")
-except Exception:
-    pass
+
+
+def _select_backend():
+
+    try:
+        from IPython import get_ipython
+        if get_ipython() is not None:
+            return  # nao forcar nada — inline cuida do show()
+    except Exception:
+        pass
+
+    import importlib.util as _il
+    for backend, modulo in (("TkAgg", "tkinter"),
+                            ("QtAgg", "PyQt5"),
+                            ("QtAgg", "PySide6")):
+        if _il.find_spec(modulo) is not None:
+            try:
+                matplotlib.use(backend, force=True)
+                return
+            except Exception:
+                continue
+    matplotlib.use("Agg", force=True)
+
+
+_select_backend()
+
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
