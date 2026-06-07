@@ -268,8 +268,6 @@ def SERKF45_cuda(
             for jgrp in range(n_funcs):
                 final_list[jgrp].append(y_host[jgrp].tolist())
 
-    print(f"Integrando {m} EDOs com SERKF45 ({_mode})...")
-
     y = _xp.asarray(yn, dtype=dtype).reshape(
         m,
     )
