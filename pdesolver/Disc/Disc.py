@@ -100,6 +100,159 @@ def _expand_indices(
     return list_eq
 
 
+def _bc_coeffs(kind: str, func_bd_str: str) -> Tuple[str, str, str]:
+    k = (kind or "").lower()
+    if k == "robin":
+        parts = [p.strip() for p in str(func_bd_str).split(";")]
+        if len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+        if len(parts) == 2:
+            return parts[0], parts[1], "0"
+        return "0", "1", str(func_bd_str)
+    return "0", "1", str(func_bd_str)
+
+
+def _ghost_repl(inward: str, bnd: str, h: float, a: str, b: str, g: str) -> str:
+    if a.strip() == "0" and b.strip() == "1":
+        return f"({inward} + 2*{h}*({g}))"
+    return f"({inward} + (2*{h}/({b}))*(({g}) - ({a})*{bnd}))"
+
+
+def _expand_node_2d(template: str, i: int, j: int) -> str:
+    s = (
+        template
+        .replace("i+1", str(i + 1))
+        .replace("i-1", str(i - 1))
+        .replace("i-2", str(i - 2))
+        .replace("i+2", str(i + 2))
+        .replace("ii",  str(i))
+    )
+    s = (
+        s
+        .replace("j+1", str(j + 1))
+        .replace("j-1", str(j - 1))
+        .replace("j-2", str(j - 2))
+        .replace("j+2", str(j + 2))
+        .replace("j",   str(j))
+    )
+    return s
+
+
+def _bd_func_xy(expr: str, x_val, y_val, str_sp_vars: str) -> str:
+    out = _repl_symbol(expr, str_sp_vars[0], str(x_val))
+    out = _repl_symbol(out, str_sp_vars[1], str(y_val))
+    return out
+
+
+def _ghost_eq_1d(
+    template: str,
+    side: str,
+    n_part: List[int],
+    n_funcs: int,
+    west_bd: List[str],
+    east_bd: List[str],
+    west_func_bd: List[str],
+    east_func_bd: List[str],
+    str_sp_vars: str,
+) -> str:
+
+    Nx = n_part[0]
+    hx = 1.0 / (Nx - 1)
+    i = 0 if side == "west" else Nx - 1
+
+    eq = (
+        template
+        .replace("i+1", str(i + 1))
+        .replace("i-1", str(i - 1))
+        .replace("i-2", str(i - 2))
+        .replace("i+2", str(i + 2))
+        .replace("ii",  str(i))
+        .replace("j", "0")
+    )
+
+    for k in range(n_funcs):
+        if side == "west":
+            a, b, g = _bc_coeffs(west_bd[k], west_func_bd[k])
+            xc = "0"
+            tok = f"XX{k}_-1_0"
+            inward = f"XX{k}_1_0"
+            bnd = f"XX{k}_0_0"
+        else:
+            a, b, g = _bc_coeffs(east_bd[k], east_func_bd[k])
+            xc = str((Nx - 1) * hx)
+            tok = f"XX{k}_{Nx}_0"
+            inward = f"XX{k}_{Nx - 2}_0"
+            bnd = f"XX{k}_{Nx - 1}_0"
+        a = _repl_symbol(a, str_sp_vars[0], xc)
+        b = _repl_symbol(b, str_sp_vars[0], xc)
+        g = _repl_symbol(g, str_sp_vars[0], xc)
+        eq = eq.replace(tok, _ghost_repl(inward, bnd, hx, a, b, g))
+    return eq
+
+
+def _ghost_eq_2d(
+    template: str,
+    i: int,
+    j: int,
+    n_part: List[int],
+    n_funcs: int,
+    bd_kind: dict,
+    bd_func: dict,
+    str_sp_vars: str,
+) -> str:
+
+    Nx, Ny = n_part[0], n_part[1]
+    h = 1.0 / (Nx - 1)
+    hx = 1.0 / (Nx - 1)
+    hy = 1.0 / (Ny - 1)
+    x_val = i * hx
+    y_val = j * hy
+
+    eq = _expand_node_2d(template, i, j)
+
+    if i == 0:
+        for k in range(n_funcs):
+            a, b, g = _bc_coeffs(bd_kind["west"][k], bd_func["west"][k])
+            a = _bd_func_xy(a, x_val, y_val, str_sp_vars)
+            b = _bd_func_xy(b, x_val, y_val, str_sp_vars)
+            g = _bd_func_xy(g, x_val, y_val, str_sp_vars)
+            eq = eq.replace(
+                f"XX{k}_-1_{j}",
+                _ghost_repl(f"XX{k}_1_{j}", f"XX{k}_0_{j}", h, a, b, g),
+            )
+    if i == Nx - 1:
+        for k in range(n_funcs):
+            a, b, g = _bc_coeffs(bd_kind["east"][k], bd_func["east"][k])
+            a = _bd_func_xy(a, x_val, y_val, str_sp_vars)
+            b = _bd_func_xy(b, x_val, y_val, str_sp_vars)
+            g = _bd_func_xy(g, x_val, y_val, str_sp_vars)
+            eq = eq.replace(
+                f"XX{k}_{Nx}_{j}",
+                _ghost_repl(f"XX{k}_{Nx - 2}_{j}", f"XX{k}_{Nx - 1}_{j}", h, a, b, g),
+            )
+    if j == 0:
+        for k in range(n_funcs):
+            a, b, g = _bc_coeffs(bd_kind["south"][k], bd_func["south"][k])
+            a = _bd_func_xy(a, x_val, y_val, str_sp_vars)
+            b = _bd_func_xy(b, x_val, y_val, str_sp_vars)
+            g = _bd_func_xy(g, x_val, y_val, str_sp_vars)
+            eq = eq.replace(
+                f"XX{k}_{i}_-1",
+                _ghost_repl(f"XX{k}_{i}_1", f"XX{k}_{i}_0", h, a, b, g),
+            )
+    if j == Ny - 1:
+        for k in range(n_funcs):
+            a, b, g = _bc_coeffs(bd_kind["north"][k], bd_func["north"][k])
+            a = _bd_func_xy(a, x_val, y_val, str_sp_vars)
+            b = _bd_func_xy(b, x_val, y_val, str_sp_vars)
+            g = _bd_func_xy(g, x_val, y_val, str_sp_vars)
+            eq = eq.replace(
+                f"XX{k}_{i}_{Ny}",
+                _ghost_repl(f"XX{k}_{i}_{Ny - 2}", f"XX{k}_{i}_{Ny - 1}", h, a, b, g),
+            )
+    return eq
+
+
 def _build_position_labels(n_part, str_sp_vars, n_funcs):
     positions = []
 
@@ -172,26 +325,7 @@ def df(
 
     n_funcs = len(pdes.funcs)
 
-    if len(str_sp_vars) == 2:
-        list_south = [[] for _ in range(n_funcs)]
-        list_north = [[] for _ in range(n_funcs)]
-        list_west  = [[] for _ in range(n_funcs)]
-        list_east  = [[] for _ in range(n_funcs)]
-
-        for func in range(n_funcs):
-            s_bc = get_boundary(south_bd[func], south_func_bd[func], south_alpha_bd, south_beta_bd)
-            list_south[func] = s_bc.apply("south", list_eq, n_part, xd_var, str_sp_vars)[func]
-
-            n_bc = get_boundary(north_bd[func], north_func_bd[func], north_alpha_bd, north_beta_bd)
-            list_north[func] = n_bc.apply("north", list_eq, n_part, xd_var, str_sp_vars)[func]
-
-            w_bc = get_boundary(west_bd[func], west_func_bd[func])
-            list_west[func] = w_bc.apply("west", list_eq, n_part, xd_var, str_sp_vars)[func] \
-                              if west_bd[func].lower() in ("dirichlet", "neumann", "robin") else []
-
-            e_bc = get_boundary(east_bd[func], east_func_bd[func], east_alpha_bd, east_beta_bd)
-            east_col = e_bc.apply("east", list_eq, n_part, xd_var, str_sp_vars)[func]
-            list_east[func] = [list_south[func][-1]] + east_col + [list_north[func][-1]]
+    _FLUX = ("neumann", "robin")
 
     list_positions = _build_position_labels(n_part, str_sp_vars, n_funcs)
 
@@ -200,31 +334,68 @@ def df(
             C = 0
             for i in range(n_part[0]):
                 if i == 0:
-                    bc = get_boundary(west_bd[func], west_func_bd[func])
-                    list_positions[func][i] = bc.apply(
-                        "west", list_eq, n_part, xd_var, str_sp_vars
-                    )[func][0]
+                    if west_bd[func].lower() in _FLUX:
+                        list_positions[func][i] = _ghost_eq_1d(
+                            eqrs[func], "west", n_part, n_funcs,
+                            west_bd, east_bd, west_func_bd, east_func_bd, str_sp_vars
+                        )
+                    else:
+                        bc = get_boundary(west_bd[func], west_func_bd[func])
+                        list_positions[func][i] = bc.apply(
+                            "west", list_eq, n_part, xd_var, str_sp_vars
+                        )[func][0]
                 elif i == n_part[0] - 1:
-                    bc = get_boundary(east_bd[func], east_func_bd[func], east_alpha_bd, east_beta_bd)
-                    list_positions[func][i] = bc.apply(
-                        "east", list_eq, n_part, xd_var, str_sp_vars
-                    )[func][0]
+                    if east_bd[func].lower() in _FLUX:
+                        list_positions[func][i] = _ghost_eq_1d(
+                            eqrs[func], "east", n_part, n_funcs,
+                            west_bd, east_bd, west_func_bd, east_func_bd, str_sp_vars
+                        )
+                    else:
+                        bc = get_boundary(east_bd[func], east_func_bd[func], east_alpha_bd, east_beta_bd)
+                        list_positions[func][i] = bc.apply(
+                            "east", list_eq, n_part, xd_var, str_sp_vars
+                        )[func][0]
                 else:
                     list_positions[func][i] = list_eq[func][C]
                     C += 1
 
     elif len(str_sp_vars) == 2:
+        Nx, Ny = n_part[0], n_part[1]
+        bd_kind = {
+            "west": west_bd, "east": east_bd,
+            "south": south_bd, "north": north_bd,
+        }
+        bd_func = {
+            "west": west_func_bd, "east": east_func_bd,
+            "south": south_func_bd, "north": north_func_bd,
+        }
         for func in range(n_funcs):
             C = 0
-            for idx in range(len(list_positions[func])):
-                label = list_positions[func][idx]
-                if   "S" in label: list_positions[func][idx] = list_south[func].pop(0) if list_south[func] else label
-                elif "N" in label: list_positions[func][idx] = list_north[func].pop(0) if list_north[func] else label
-                elif "E" in label: list_positions[func][idx] = list_east[func].pop(0)  if list_east[func]  else label
-                elif "W" in label: list_positions[func][idx] = list_west[func].pop(0)  if list_west[func]  else label
-                elif "C" in label:
-                    list_positions[func][idx] = list_eq[func][C]
-                    C += 1
+            for i in range(Nx):
+                for j in range(Ny):
+                    pos = i * Ny + j
+                    asides = []
+                    if i == 0:      asides.append("west")
+                    if i == Nx - 1: asides.append("east")
+                    if j == 0:      asides.append("south")
+                    if j == Ny - 1: asides.append("north")
+                    if not asides:
+                        list_positions[func][pos] = list_eq[func][C]
+                        C += 1
+                        continue
+                    kinds = [bd_kind[s][func].lower() for s in asides]
+                    if "dirichlet" in kinds:
+                        sd = asides[kinds.index("dirichlet")]
+                        hx = 1.0 / (Nx - 1)
+                        hy = 1.0 / (Ny - 1)
+                        list_positions[func][pos] = _bd_func_xy(
+                            bd_func[sd][func], i * hx, j * hy, str_sp_vars
+                        )
+                    else:
+                        list_positions[func][pos] = _ghost_eq_2d(
+                            eqrs[func], i, j, n_part, n_funcs,
+                            bd_kind, bd_func, str_sp_vars
+                        )
 
     d_vars: List[str] = []
     if len(str_sp_vars) == 2:
@@ -262,28 +433,22 @@ def df(
     hy = 1.0 / (n_part[1] - 1) if len(str_sp_vars) == 2 else 1.0
 
     if len(str_sp_vars) == 2:
-        sides = {
-            'west':  west_bd,
-            'east':  east_bd,
-            'north': north_bd,
-            'south': south_bd,
-        }
-        func_exprs = {
-            'west':  west_func_bd,
-            'east':  east_func_bd,
-            'north': north_func_bd,
-            'south': south_func_bd,
-        }
         Nx, Ny = n_part[0], n_part[1]
-
-        any_neumann = any(
-            sides[s][f].lower() == 'neumann'
-            for s in sides for f in range(n_funcs)
+        bd_kind = {
+            "west": west_bd, "east": east_bd,
+            "south": south_bd, "north": north_bd,
+        }
+        bd_func = {
+            "west": west_func_bd, "east": east_func_bd,
+            "south": south_func_bd, "north": north_func_bd,
+        }
+        any_flux = any(
+            bd_kind[s][f].lower() in _FLUX
+            for s in bd_kind for f in range(n_funcs)
         )
-        if any_neumann and (Nx < 3 or Ny < 3):
+        if any_flux and (Nx < 3 or Ny < 3):
             raise ValueError(
-                f"Neumann com discretizacao one-sided de 2a ordem exige "
-                f"min(Nx, Ny) >= 3. Recebido: Nx={Nx}, Ny={Ny}."
+                f"Neumann/Robin 2D exige min(Nx, Ny) >= 3. Recebido: Nx={Nx}, Ny={Ny}."
             )
 
         def _idx(func, i, j):
@@ -292,46 +457,29 @@ def df(
         for func in range(n_funcs):
             for i in range(Nx):
                 for j in range(Ny):
-                    idx = _idx(func, i, j)
-                    side = None
-                    if   i == 0:      side = 'west'
-                    elif i == Nx - 1: side = 'east'
-                    elif j == 0:      side = 'south'
-                    elif j == Ny - 1: side = 'north'
-                    if side is None:
+                    asides = []
+                    if i == 0:      asides.append("west")
+                    if i == Nx - 1: asides.append("east")
+                    if j == 0:      asides.append("south")
+                    if j == Ny - 1: asides.append("north")
+                    if not asides:
                         continue
-                    bc_kind = sides[side][func].lower()
-
-                    if bc_kind == 'dirichlet':
-                        dirichlet_constraints[idx] = {
-                            'expr': func_exprs[side][func],
-                            'x': i * hx,
-                            'y': j * hy,
-                        }
-                    elif bc_kind == 'neumann':
-                        if side == 'south':
-                            n1 = _idx(func, i, 1)
-                            n2 = _idx(func, i, 2)
-                        elif side == 'north':
-                            n1 = _idx(func, i, Ny - 2)
-                            n2 = _idx(func, i, Ny - 3)
-                        elif side == 'west':
-                            n1 = _idx(func, 1, j)
-                            n2 = _idx(func, 2, j)
-                        else:
-                            n1 = _idx(func, Nx - 2, j)
-                            n2 = _idx(func, Nx - 3, j)
-
-                        neumann_constraints[idx] = {
-                            'expr': func_exprs[side][func],
-                            'x': i * hx,
-                            'y': j * hy,
-                            'side': side,
-                            'idx_n1': n1,
-                            'idx_n2': n2,
+                    kinds = [bd_kind[s][func].lower() for s in asides]
+                    if "dirichlet" in kinds:
+                        sd = asides[kinds.index("dirichlet")]
+                        dirichlet_constraints[_idx(func, i, j)] = {
+                            "expr": bd_func[sd][func],
+                            "x": i * hx,
+                            "y": j * hy,
                         }
     else:
         Nx = n_part[0]
+        any_flux_1d = any(
+            west_bd[f].lower() in _FLUX or east_bd[f].lower() in _FLUX
+            for f in range(n_funcs)
+        )
+        if any_flux_1d and Nx < 3:
+            raise ValueError("Neumann/Robin 1D exige Nx >= 3.")
         for func in range(n_funcs):
             offset = func * Nx
             if west_bd[func].lower() == 'dirichlet':
@@ -340,33 +488,11 @@ def df(
                     'x': 0.0,
                     'y': 0.0,
                 }
-            elif west_bd[func].lower() == 'neumann':
-                if Nx < 3:
-                    raise ValueError("Neumann 1D exige Nx >= 3.")
-                neumann_constraints[offset] = {
-                    'expr': west_func_bd[func],
-                    'x': 0.0,
-                    'y': 0.0,
-                    'side': 'west',
-                    'idx_n1': offset + 1,
-                    'idx_n2': offset + 2,
-                }
             if east_bd[func].lower() == 'dirichlet':
                 dirichlet_constraints[offset + Nx - 1] = {
                     'expr': east_func_bd[func],
                     'x': (Nx - 1) * hx,
                     'y': 0.0,
-                }
-            elif east_bd[func].lower() == 'neumann':
-                if Nx < 3:
-                    raise ValueError("Neumann 1D exige Nx >= 3.")
-                neumann_constraints[offset + Nx - 1] = {
-                    'expr': east_func_bd[func],
-                    'x': (Nx - 1) * hx,
-                    'y': 0.0,
-                    'side': 'east',
-                    'idx_n1': offset + Nx - 2,
-                    'idx_n2': offset + Nx - 3,
                 }
 
     return flat_list_positions, d_vars, dirichlet_constraints, neumann_constraints

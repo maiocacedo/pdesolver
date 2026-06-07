@@ -1,5 +1,11 @@
 
 import numpy as np
+import matplotlib
+try:
+    if matplotlib.get_backend().lower() == "agg":
+        matplotlib.use("TkAgg")
+except Exception:
+    pass
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 

@@ -1,6 +1,11 @@
 import json
 
 import matplotlib
+try:
+    if matplotlib.get_backend().lower() == "agg":
+        matplotlib.use("TkAgg")
+except Exception:
+    pass
 import numpy as np
 import sympy as sp
 
@@ -12,8 +17,6 @@ from .PDE import PDE
 from .Solvers.bdf2 import bdf2
 from .Solvers.CN import cn
 from .Solvers.solver_base import detect_linearity_symbolic
-
-matplotlib.use("TkAgg")
 
 
 class PDES:
