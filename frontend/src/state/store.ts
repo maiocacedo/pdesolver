@@ -148,14 +148,16 @@ export const useStore = create<Store>((set, get) => ({
   removePde: (id) => set((s) => {
     if (s.system.pdes.length <= 1) return s;
     const deletedIdx = s.system.pdes.findIndex((p) => p.id === id);
+    if (deletedIdx === -1) return s; // Guard against not found
+
     const pdes = s.system.pdes.filter((p) => p.id !== id);
     const activePdeId =
       s.system.activePdeId === id ? pdes[0].id : s.system.activePdeId;
 
-    // Adjust visibleFieldIndices and activeFieldIndex to account for index shifts
+    // Filter out the deleted index first, then shift remaining indices down
     const nextVisible = s.run.visibleFieldIndices
-      .map((idx) => (idx > deletedIdx ? idx - 1 : idx))
-      .filter((_, i) => s.run.visibleFieldIndices[i] !== deletedIdx);
+      .filter((idx) => idx !== deletedIdx)
+      .map((idx) => (idx > deletedIdx ? idx - 1 : idx));
     const finalVisible = nextVisible.length > 0 ? nextVisible : [0];
 
     let nextActive = s.run.activeFieldIndex;
