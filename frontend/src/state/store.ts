@@ -182,6 +182,8 @@ export const useStore = create<Store>((set, get) => ({
       ...s.run,
       status: "pristine",
       fields: null,
+      activeFieldIndex: 0,
+      visibleFieldIndices: [0],
       error: null,
       meta: null,
       lastRunMs: 0
@@ -246,6 +248,9 @@ export const useStore = create<Store>((set, get) => ({
   })),
 
   toggleVisibleField: (index) => set((s) => {
+    const maxLen = s.run.fields ? s.run.fields.length : s.system.pdes.length;
+    if (index < 0 || index >= maxLen) return s;
+
     const isVisible = s.run.visibleFieldIndices.includes(index);
     let nextVisible: number[];
     let nextActive = s.run.activeFieldIndex;
