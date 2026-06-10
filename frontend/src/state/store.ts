@@ -42,7 +42,7 @@ export interface SystemConfig {
 
 export interface UIState {
   mode: "simple" | "advanced";
-  vizTab: "plot1d" | "heatmap" | "animation" | "plot3d";
+  vizTab: "plot1d" | "heatmap" | "plot3d";
   showInspector: boolean;
   drawer: "gallery" | "history" | null;
   sidebarWidth: number;
@@ -55,6 +55,7 @@ export interface HistoryEntry {
   name: string;
   time: string;
   nx: number;
+  ny?: number;
   nt: number;
   method: TimeMethod;
   snapshot: SystemConfig;
@@ -64,6 +65,7 @@ export interface RunState {
   status: "pristine" | "solving" | "solved" | "error";
   fields: FieldOut[] | null;                // length matches system.pdes
   activeFieldIndex: number;                 // which field the viz is showing
+  visibleFieldIndices: number[];
   lastRunMs: number;
   history: HistoryEntry[];
   error: string | null;
@@ -93,6 +95,7 @@ interface Store {
   // Run
   solve(): Promise<void>;
   resetRun(): void;
+  toggleVisibleField(index: number): void;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -111,6 +114,7 @@ export const useStore = create<Store>((set, get) => ({
     status: "pristine",
     fields: null,
     activeFieldIndex: 0,
+    visibleFieldIndices: [0],
     lastRunMs: 0,
     history: [],
     error: null,
@@ -213,6 +217,7 @@ export const useStore = create<Store>((set, get) => ({
           status: "solved",
           fields: result.fields,
           activeFieldIndex: 0,
+          visibleFieldIndices: [0],
           lastRunMs: performance.now() - t0,
           meta: result.meta,
           history: [
@@ -229,8 +234,44 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   resetRun: () => set((s) => ({
-    run: { ...s.run, status: "pristine", fields: null, error: null, meta: null },
+    run: {
+      ...s.run,
+      status: "pristine",
+      fields: null,
+      activeFieldIndex: 0,
+      visibleFieldIndices: [0],
+      error: null,
+      meta: null,
+    },
   })),
+
+  toggleVisibleField: (index) => set((s) => {
+    const isVisible = s.run.visibleFieldIndices.includes(index);
+    let nextVisible: number[];
+    let nextActive = s.run.activeFieldIndex;
+
+    if (isVisible) {
+      if (s.run.visibleFieldIndices.length > 1) {
+        nextVisible = s.run.visibleFieldIndices.filter((i) => i !== index);
+        if (s.run.activeFieldIndex === index) {
+          nextActive = nextVisible[0];
+        }
+      } else {
+        nextVisible = s.run.visibleFieldIndices;
+      }
+    } else {
+      nextVisible = [...s.run.visibleFieldIndices, index].sort((a, b) => a - b);
+      nextActive = index;
+    }
+
+    return {
+      run: {
+        ...s.run,
+        visibleFieldIndices: nextVisible,
+        activeFieldIndex: nextActive,
+      },
+    };
+  }),
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -273,6 +314,7 @@ function historyEntry(sys: SystemConfig): HistoryEntry {
     name: sys.pdes.map((p) => p.name).join(" + "),
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     nx: sys.mesh.nx,
+    ny: sys.mesh.ny,
     nt: sys.mesh.nt,
     method: sys.scheme.time,
     snapshot: sys,
