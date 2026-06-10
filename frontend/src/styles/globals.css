@@ -1,5 +1,13 @@
 /* pdesolver studio — global styles. Design tokens are in tokens.css. */
 
+:root {
+  --color-field-0: var(--accent);
+  --color-field-1: oklch(0.65 0.22 140); /* Vibrant Emerald */
+  --color-field-2: oklch(0.60 0.22 30);  /* Warm Coral */
+  --color-field-3: oklch(0.55 0.20 280); /* Royal Violet */
+  --color-field-4: oklch(0.62 0.20 80);  /* Amber Gold */
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
 
 *, *::before, *::after { box-sizing: border-box; }

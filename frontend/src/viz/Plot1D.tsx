@@ -10,11 +10,11 @@ interface Props {
 }
 
 const FIELD_COLORS = [
-  "var(--accent)",        // Blue/Teal (Field 0)
-  "oklch(0.65 0.22 140)", // Vibrant Emerald (Field 1)
-  "oklch(0.60 0.22 30)",  // Warm Coral (Field 2)
-  "oklch(0.55 0.20 280)", // Royal Violet (Field 3)
-  "oklch(0.62 0.20 80)",  // Amber Gold (Field 4)
+  "var(--color-field-0)",
+  "var(--color-field-1)",
+  "var(--color-field-2)",
+  "var(--color-field-3)",
+  "var(--color-field-4)",
 ];
 
 export function Plot1D({ fields, visibleFieldIndices, mode = "snapshots", tIndex = 0, palette = "viridis" }: Props) {
@@ -104,7 +104,7 @@ export function Plot1D({ fields, visibleFieldIndices, mode = "snapshots", tIndex
         return profiles.map((ti, k) => {
           const row = f.grid[ti];
           if (!row) return null;
-          const path = row.map((y, i) => `${i === 0 ? "M" : "L"}${mapX(xs[i])},${mapY(y)}`).join(" ");
+          const path = row.map((y, i) => `${i === 0 ? "M" : "L"}${mapX(f.xs[i])},${mapY(y)}`).join(" ");
           
           const tNorm = profiles.length === 1 ? 0.6 : k / Math.max(1, profiles.length - 1);
           
