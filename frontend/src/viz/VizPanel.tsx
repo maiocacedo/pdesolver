@@ -7,15 +7,31 @@ import { Plot1D } from "./Plot1D";
 import { Heatmap } from "./Heatmap";
 import { Heatmap2D } from "./Heatmap2D";
 import { Surface3D } from "./Surface3D";
+import { Surface3DWebGL } from "./Surface3DWebGL";
 import type { Palette } from "./colormap";
 
-type VizTab = "plot1d" | "heatmap" | "animation" | "plot3d";
+type VizTab = "plot1d" | "heatmap" | "plot3d";
 
 interface Props {
   palette?: Palette;
   tab?: VizTab;
   onTabChange?: (t: VizTab) => void;
+  engine3D?: "auto" | "webgl" | "compat";
 }
+
+function checkWebGLSupport(): boolean {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
+const isWebGLSupported = typeof window !== "undefined" ? checkWebGLSupport() : false;
 
 function EmptyState({ solving }: { solving: boolean }) {
   if (solving) {
@@ -56,7 +72,6 @@ function EmptyState({ solving }: { solving: boolean }) {
 const TABS: Array<{ id: VizTab; label: string; glyph: ReactNode }> = [
   { id: "plot1d", label: "1D profile", glyph: <Icon.Plot /> },
   { id: "heatmap", label: "Heatmap", glyph: <Icon.Heatmap /> },
-  { id: "animation", label: "Animation", glyph: <Icon.Anim /> },
   { id: "plot3d", label: "Surface 3D", glyph: <Icon.Cube /> },
 ];
 
@@ -151,7 +166,7 @@ function SolverConsole({ status, lastRunMs, error, meta, system }: ConsoleProps)
   );
 }
 
-export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Props) {
+export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engine3D = "auto" }: Props) {
   const storeTab = useStore((s) => s.ui.vizTab);
   const setUI = useStore((s) => s.setUI);
   const status = useStore((s) => s.run.status);
@@ -166,6 +181,8 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
   const system = useStore((s) => s.system);
   const runError = useStore((s) => s.run.error);
   const lastRunMs = useStore((s) => s.run.lastRunMs);
+  const visibleFieldIndices = useStore((s) => s.run.visibleFieldIndices);
+  const toggleVisibleField = useStore((s) => s.toggleVisibleField);
 
   // Allow controlled tab from parent (DesktopShell menu) or fall back to store
   const tab: VizTab = tabProp ?? storeTab;
@@ -177,14 +194,83 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
   const field: FieldOut | null = fields?.[activeFieldIndex] ?? null;
   const is2D = !!field?.ys;
 
+  const visiblePanels: Array<"plot1d" | "heatmap" | "plot3d" | "console"> = [];
+  if (!is2D) {
+    visiblePanels.push("plot1d", "heatmap", "plot3d", "console");
+  } else {
+    visiblePanels.push("plot3d", "console");
+  }
+
   const [tIndex, setTIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1.0);
   const [plotMode, setPlotMode] = useState<"snapshots" | "all">("snapshots");
-  const [visibleFieldIndices, setVisibleFieldIndices] = useState<number[]>([0]);
 
-  useEffect(() => {
-    setVisibleFieldIndices([0]);
-  }, [fields]);
+  const useWebGL = engine3D === "webgl" || (engine3D === "auto" && isWebGLSupported);
+
+  const render3DPlot = () => {
+    if (useWebGL) {
+      return <Surface3DWebGL field={field!} palette={palette} tIndex={tIndex} />;
+    }
+    return <Surface3D field={field!} palette={palette} tIndex={tIndex} />;
+  };
+
+  const [recording, setRecording] = useState(false);
+
+  const startRecording = async () => {
+    const canvas = document.querySelector(".viz-stage canvas") as HTMLCanvasElement;
+    if (!canvas) {
+      alert("No canvas found to record! Video recording is optimized for canvas-based views (Heatmaps, 2D simulation, and 3D surface). Please switch tab/view to record.");
+      return;
+    }
+
+    setPlaying(false);
+
+    try {
+      const stream = (canvas as any).captureStream ? (canvas as any).captureStream(30) : null;
+      if (!stream) {
+        alert("Canvas recording is not supported in this browser.");
+        return;
+      }
+
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream, { mimeType: "video/webm; codecs=vp9" });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "simulation_video.webm";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      };
+
+      setRecording(true);
+      recorder.start();
+
+      const totalSteps = field!.ts.length;
+      for (let i = 0; i < totalSteps; i++) {
+        setTIndex(i);
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
+
+      recorder.stop();
+    } catch (err) {
+      console.error("Recording failed", err);
+      alert("Recording failed: " + err);
+    } finally {
+      setRecording(false);
+    }
+  };
+
+
 
   const timeRef = useRef(0);
   const requestRef = useRef<number | null>(null);
@@ -209,7 +295,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
     const t0 = field.ts[0];
     const tf = field.ts[field.ts.length - 1];
     const physicalDuration = tf - t0;
-    const playbackDurationSeconds = 6.0;
+    const playbackDurationSeconds = 6.0 / speed;
     const speedFactor = physicalDuration / playbackDurationSeconds;
 
     const animate = (realTimeMs: number) => {
@@ -245,7 +331,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
         cancelAnimationFrame(requestRef.current);
       }
     };
-  }, [playing, field]);
+  }, [playing, field, speed]);
 
   useEffect(() => { setTIndex(0); }, [field]);
 
@@ -253,13 +339,14 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
   const solving = status === "solving";
   const showSlider = !empty && (
     (layoutMode === "tabs" && (
-      ((tab === "plot1d" || tab === "animation") && plotMode !== "all") ||
+      (tab === "plot1d" && plotMode !== "all") ||
+      tab === "plot3d" ||
       (tab === "heatmap" && is2D)
     )) ||
     (layoutMode === "grid" && (
       maximizedPanel === null ||
       maximizedPanel === "plot1d" ||
-      (maximizedPanel === "plot3d" && is2D)
+      maximizedPanel === "plot3d"
     ))
   );
 
@@ -267,22 +354,22 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
   const frameTitle = empty
     ? "Nothing to plot yet"
     : is2D
-      ? (tab === "heatmap" || tab === "animation")
+      ? tab === "heatmap"
         ? `${fn}(x, y) — t = ${field.ts[tIndex].toFixed(4)}`
-        : "Not available for 2D fields"
+        : tab === "plot3d"
+          ? `Surface ${fn}(x, y) — t = ${field.ts[tIndex].toFixed(4)}`
+          : "Not available for 2D fields"
       : tab === "plot1d"
         ? plotMode === "all" ? `Profiles for ${fn}(x, t)` : `${fn}(x, t = ${field.ts[tIndex].toFixed(4)})`
         : tab === "heatmap" ? `${fn}(x, t) over the (x, t) plane`
-        : tab === "animation" ? `${fn}(x, t) — t = ${field.ts[tIndex].toFixed(4)}`
-        : `Surface ${fn}(x, t)`;
+        : `Surface ${fn}(x, t) — t = ${field.ts[tIndex].toFixed(4)}`;
 
   const frameSub = empty
     ? "—"
     : is2D
-      ? (tab === "heatmap" || tab === "animation") ? "mode='heatmap2d'" : "—"
+      ? tab === "heatmap" ? "mode='heatmap2d'" : tab === "plot3d" ? "mode='plot3d'" : "—"
       : tab === "plot1d" ? `mode='plot1d${plotMode === "all" ? "_all" : ""}'`
         : tab === "heatmap" ? "mode='heatmap1d'"
-        : tab === "animation" ? "mode='animation1d'"
         : "mode='plot3d'";
 
   const getPanelTitle = (panelId: "plot1d" | "heatmap" | "plot3d" | "console") => {
@@ -314,15 +401,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
               <input
                 type="checkbox"
                 checked={isChecked}
-                onChange={() => {
-                  if (isChecked) {
-                    if (visibleFieldIndices.length > 1) {
-                      setVisibleFieldIndices(visibleFieldIndices.filter(i => i !== idx));
-                    }
-                  } else {
-                    setVisibleFieldIndices([...visibleFieldIndices, idx].sort());
-                  }
-                }}
+                onChange={() => toggleVisibleField(idx)}
                 style={{
                   accentColor: "var(--accent)",
                   cursor: "pointer",
@@ -384,10 +463,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
         }
         return <Heatmap field={field!} palette={palette} />;
       case "plot3d":
-        if (is2D) {
-          return <Heatmap2D field={field!} tIndex={tIndex} palette={palette} />;
-        }
-        return <Surface3D field={field!} palette={palette} />;
+        return render3DPlot();
       case "console":
         return (
           <SolverConsole
@@ -420,7 +496,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
         )}
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, paddingRight: 12 }}>
-          {layoutMode === "tabs" && (tab === "plot1d" || tab === "animation") && !empty && renderFieldSelectors()}
+          {layoutMode === "tabs" && tab === "plot1d" && !empty && renderFieldSelectors()}
           {layoutMode === "tabs" && tab === "plot1d" && !empty && (
             <div className="seg" style={{ marginRight: 8, marginLeft: 8 }}>
               <button data-active={plotMode === "snapshots" ? "1" : "0"}
@@ -453,31 +529,18 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
               </div>
             </div>
           ) : (
-            <div className="viz-grid-layout">
-              <div className="grid-panel">
-                {renderPanelHeader("plot1d")}
-                <div className="panel-body">
-                  {renderPanelBody("plot1d")}
+            <div className="viz-grid-layout" style={{
+              gridTemplateColumns: visiblePanels.length <= 2 ? "1fr 1fr" : "repeat(2, 1fr)",
+              gridTemplateRows: visiblePanels.length <= 2 ? "1fr" : "repeat(2, 1fr)"
+            }}>
+              {visiblePanels.map((panelId) => (
+                <div key={panelId} className="grid-panel">
+                  {renderPanelHeader(panelId)}
+                  <div className="panel-body">
+                    {renderPanelBody(panelId)}
+                  </div>
                 </div>
-              </div>
-              <div className="grid-panel">
-                {renderPanelHeader("heatmap")}
-                <div className="panel-body">
-                  {renderPanelBody("heatmap")}
-                </div>
-              </div>
-              <div className="grid-panel">
-                {renderPanelHeader("plot3d")}
-                <div className="panel-body">
-                  {renderPanelBody("plot3d")}
-                </div>
-              </div>
-              <div className="grid-panel">
-                {renderPanelHeader("console")}
-                <div className="panel-body">
-                  {renderPanelBody("console")}
-                </div>
-              </div>
+              ))}
             </div>
           )
         ) : (
@@ -490,21 +553,21 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
               {empty ? (
                 <EmptyState solving={solving} />
               ) : is2D ? (
-                (tab === "heatmap" || tab === "animation") ? (
+                tab === "heatmap" ? (
                   <Heatmap2D field={field} tIndex={tIndex} palette={palette} />
+                ) : tab === "plot3d" ? (
+                  render3DPlot()
                 ) : (
                   <div style={{ textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
-                    Not available for 2D fields — switch to Heatmap or Animation
+                    Not available for 2D fields — switch to Heatmap or Surface 3D
                   </div>
                 )
               ) : tab === "plot1d" ? (
                 <Plot1D fields={fields!} visibleFieldIndices={visibleFieldIndices} mode={plotMode} tIndex={tIndex} palette={palette} />
               ) : tab === "heatmap" ? (
                 <Heatmap field={field} palette={palette} />
-              ) : tab === "animation" ? (
-                <Plot1D fields={fields!} visibleFieldIndices={visibleFieldIndices} mode="snapshots" tIndex={tIndex} palette={palette} />
               ) : (
-                <Surface3D field={field} palette={palette} />
+                render3DPlot()
               )}
             </div>
           </div>
@@ -517,6 +580,19 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
                       onClick={() => setPlaying(!playing)}>
                 {playing ? <Icon.Pause /> : <Icon.Run />}
               </button>
+              <select
+                value={speed}
+                onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                className="speed-select"
+                aria-label="Playback speed"
+              >
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1">1.0x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2.0x</option>
+                <option value="4">4.0x</option>
+              </select>
               <div className="label">t = {field.ts[tIndex].toFixed(4)}</div>
               <div className="time-track"
                    onClick={(e) => {
@@ -555,6 +631,27 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
               <button className="play" aria-label="Reset"
                       onClick={() => { setTIndex(0); setPlaying(false); }}>
                 <Icon.Reset />
+              </button>
+              <button className="play" aria-label="Record simulation video"
+                      onClick={startRecording}
+                      disabled={recording}
+                      style={{
+                        marginLeft: 6,
+                        color: recording ? "oklch(0.65 0.25 20)" : "inherit",
+                        position: "relative"
+                      }}>
+                {recording ? (
+                  <span style={{
+                    display: "inline-block",
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "oklch(0.65 0.25 20)",
+                    boxShadow: "0 0 8px oklch(0.65 0.25 20)"
+                  }} />
+                ) : (
+                  <span style={{ fontSize: 11 }}>📹 Rec</span>
+                )}
               </button>
             </div>
           </div>
