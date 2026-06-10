@@ -180,6 +180,12 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
   const [tIndex, setTIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [plotMode, setPlotMode] = useState<"snapshots" | "all">("snapshots");
+  const [visibleFieldIndices, setVisibleFieldIndices] = useState<number[]>([0]);
+
+  useEffect(() => {
+    setVisibleFieldIndices([0]);
+  }, [fields]);
+
   const timeRef = useRef(0);
   const requestRef = useRef<number | null>(null);
   const previousTimeRef = useRef<number | null>(null);
@@ -292,12 +298,53 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
     }
   };
 
+  const renderFieldSelectors = () => {
+    if (!fields || fields.length <= 1) return null;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 12 }}>
+        {fields.map((f, idx) => {
+          const name = f.meta?.fieldName || `Field ${idx + 1}`;
+          const isChecked = visibleFieldIndices.includes(idx);
+          return (
+            <label key={idx} style={{
+              display: "flex", alignItems: "center", gap: 6, fontSize: 12,
+              fontWeight: 500, color: "var(--text-muted)", cursor: "pointer",
+              userSelect: "none"
+            }}>
+              <input
+                type="checkbox"
+                checked={isChecked}
+                onChange={() => {
+                  if (isChecked) {
+                    if (visibleFieldIndices.length > 1) {
+                      setVisibleFieldIndices(visibleFieldIndices.filter(i => i !== idx));
+                    }
+                  } else {
+                    setVisibleFieldIndices([...visibleFieldIndices, idx].sort());
+                  }
+                }}
+                style={{
+                  accentColor: "var(--accent)",
+                  cursor: "pointer",
+                }}
+              />
+              <span style={{ color: isChecked ? "var(--text)" : "var(--text-faint)" }}>{name}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderPanelHeader = (panelId: "plot1d" | "heatmap" | "plot3d" | "console") => {
     const title = getPanelTitle(panelId);
     const isMax = maximizedPanel === panelId;
     return (
       <div className="panel-header">
-        <span className="panel-title">{title}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="panel-title">{title}</span>
+          {panelId === "plot1d" && renderFieldSelectors()}
+        </div>
         <button
           className="panel-action"
           onClick={() => toggleMaximizedPanel(panelId)}
@@ -326,7 +373,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
             </div>
           );
         }
-        return <Plot1D field={field!} mode={plotMode} tIndex={tIndex} palette={palette} />;
+        return <Plot1D fields={fields!} visibleFieldIndices={visibleFieldIndices} mode={plotMode} tIndex={tIndex} palette={palette} />;
       case "heatmap":
         if (is2D) {
           return (
@@ -373,8 +420,9 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
         )}
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, paddingRight: 12 }}>
+          {layoutMode === "tabs" && (tab === "plot1d" || tab === "animation") && !empty && renderFieldSelectors()}
           {layoutMode === "tabs" && tab === "plot1d" && !empty && (
-            <div className="seg" style={{ marginRight: 8 }}>
+            <div className="seg" style={{ marginRight: 8, marginLeft: 8 }}>
               <button data-active={plotMode === "snapshots" ? "1" : "0"}
                       onClick={() => setPlotMode("snapshots")}>Snapshot</button>
               <button data-active={plotMode === "all" ? "1" : "0"}
@@ -450,11 +498,11 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
                   </div>
                 )
               ) : tab === "plot1d" ? (
-                <Plot1D field={field} mode={plotMode} tIndex={tIndex} palette={palette} />
+                <Plot1D fields={fields!} visibleFieldIndices={visibleFieldIndices} mode={plotMode} tIndex={tIndex} palette={palette} />
               ) : tab === "heatmap" ? (
                 <Heatmap field={field} palette={palette} />
               ) : tab === "animation" ? (
-                <Plot1D field={field} mode="snapshots" tIndex={tIndex} palette={palette} />
+                <Plot1D fields={fields!} visibleFieldIndices={visibleFieldIndices} mode="snapshots" tIndex={tIndex} palette={palette} />
               ) : (
                 <Surface3D field={field} palette={palette} />
               )}
