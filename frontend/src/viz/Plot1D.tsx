@@ -71,6 +71,10 @@ export function Plot1D({ fields, visibleFieldIndices, mode = "snapshots", tIndex
     ? `${visibleFieldIndices.map(idx => fields[idx]?.meta?.fieldName || `Field ${idx}`).join(", ")}(x, t)`
     : "u(x, t)";
 
+  const isDoubleColumn = mode === "all";
+  const legendW = isDoubleColumn ? 210 : 100;
+  const legendShift = isDoubleColumn ? 220 : 110;
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "100%", display: "block" }}>
       {xT.map((x, i) => (
@@ -128,8 +132,8 @@ export function Plot1D({ fields, visibleFieldIndices, mode = "snapshots", tIndex
         });
       })}
       {visibleFieldIndices.length > 1 && (
-        <g transform={`translate(${W - padR - 220}, ${padT + 6})`}>
-          <rect x="0" y="0" width="210" height={Math.max(visibleFieldIndices.length, mode === "all" ? 3 : 0) * 14 + 10} fill="var(--surface)" stroke="var(--border)" rx="6" />
+        <g transform={`translate(${W - padR - legendShift}, ${padT + 6})`}>
+          <rect x="0" y="0" width={legendW} height={Math.max(visibleFieldIndices.length, isDoubleColumn ? 4 : 0) * 14 + 10} fill="var(--surface)" stroke="var(--border)" rx="6" />
           <g transform="translate(8, 0)">
             {visibleFieldIndices.map((fieldIdx, idx) => {
               const f = fields[fieldIdx];
@@ -145,14 +149,14 @@ export function Plot1D({ fields, visibleFieldIndices, mode = "snapshots", tIndex
               );
             })}
           </g>
-          {mode === "all" && (
+          {isDoubleColumn && (
             <g transform="translate(110, 0)">
               <text x="0" y="15" fontSize="9" fontWeight="bold" fontFamily="var(--font-mono)" fill="var(--text-faint)">
                 Time:
               </text>
               <g transform="translate(0, 20)">
                 <line x1="0" x2="16" y1="2" y2="2" stroke="var(--text)" strokeWidth="2.4" opacity="0.25" />
-                <text x="22" y="5" fontSize="9" fontFamily="var(--font-mono)" fill="var(--text-faint)">t₀ (faded)</text>
+                <text x="22" y="5" fontSize="9" fontFamily="var(--font-mono)" fill="var(--text-faint)">t_0 (faded)</text>
               </g>
               <g transform="translate(0, 34)">
                 <line x1="0" x2="16" y1="2" y2="2" stroke="var(--text)" strokeWidth="2.4" opacity="0.92" />
