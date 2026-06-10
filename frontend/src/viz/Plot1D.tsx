@@ -128,21 +128,38 @@ export function Plot1D({ fields, visibleFieldIndices, mode = "snapshots", tIndex
         });
       })}
       {visibleFieldIndices.length > 1 && (
-        <g transform={`translate(${W - padR - 110}, ${padT + 6})`}>
-          <rect x="0" y="0" width="100" height={visibleFieldIndices.length * 14 + 10} fill="var(--surface)" stroke="var(--border)" rx="6" />
-          {visibleFieldIndices.map((fieldIdx, idx) => {
-            const f = fields[fieldIdx];
-            if (!f) return null;
-            const label = f.meta?.fieldName || `Field ${fieldIdx + 1}`;
-            return (
-              <g key={fieldIdx} transform={`translate(8, ${10 + idx * 14})`}>
-                <line x1="0" x2="16" y1="2" y2="2" stroke={FIELD_COLORS[fieldIdx % FIELD_COLORS.length]} strokeWidth="2.4" />
-                <text x="22" y="5" fontSize="10" fontFamily="var(--font-mono)" fill="var(--text-muted)">
-                  {label}
-                </text>
+        <g transform={`translate(${W - padR - 220}, ${padT + 6})`}>
+          <rect x="0" y="0" width="210" height={Math.max(visibleFieldIndices.length, mode === "all" ? 3 : 0) * 14 + 10} fill="var(--surface)" stroke="var(--border)" rx="6" />
+          <g transform="translate(8, 0)">
+            {visibleFieldIndices.map((fieldIdx, idx) => {
+              const f = fields[fieldIdx];
+              if (!f) return null;
+              const label = f.meta?.fieldName || `Field ${fieldIdx + 1}`;
+              return (
+                <g key={fieldIdx} transform={`translate(0, ${10 + idx * 14})`}>
+                  <line x1="0" x2="16" y1="2" y2="2" stroke={FIELD_COLORS[fieldIdx % FIELD_COLORS.length]} strokeWidth="2.4" />
+                  <text x="22" y="5" fontSize="10" fontFamily="var(--font-mono)" fill="var(--text-muted)">
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+          {mode === "all" && (
+            <g transform="translate(110, 0)">
+              <text x="0" y="15" fontSize="9" fontWeight="bold" fontFamily="var(--font-mono)" fill="var(--text-faint)">
+                Time:
+              </text>
+              <g transform="translate(0, 20)">
+                <line x1="0" x2="16" y1="2" y2="2" stroke="var(--text)" strokeWidth="2.4" opacity="0.25" />
+                <text x="22" y="5" fontSize="9" fontFamily="var(--font-mono)" fill="var(--text-faint)">t₀ (faded)</text>
               </g>
-            );
-          })}
+              <g transform="translate(0, 34)">
+                <line x1="0" x2="16" y1="2" y2="2" stroke="var(--text)" strokeWidth="2.4" opacity="0.92" />
+                <text x="22" y="5" fontSize="9" fontFamily="var(--font-mono)" fill="var(--text-faint)">t_f (solid)</text>
+              </g>
+            </g>
+          )}
         </g>
       )}
       {visibleFieldIndices.length === 1 && mode === "all" && (
