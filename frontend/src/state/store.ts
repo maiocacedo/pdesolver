@@ -150,9 +150,21 @@ export const useStore = create<Store>((set, get) => ({
     const pdes = s.system.pdes.filter((p) => p.id !== id);
     const activePdeId =
       s.system.activePdeId === id ? pdes[0].id : s.system.activePdeId;
+    
+    // Adjust visibleFieldIndices and activeFieldIndex to prevent out of bounds
+    const maxIndex = pdes.length - 1;
+    const nextVisible = s.run.visibleFieldIndices.filter((idx) => idx <= maxIndex);
+    const finalVisible = nextVisible.length > 0 ? nextVisible : [0];
+    const nextActive = s.run.activeFieldIndex > maxIndex ? 0 : s.run.activeFieldIndex;
+
     return {
       system: { ...s.system, pdes, activePdeId },
       ui: { ...s.ui, dirty: true },
+      run: {
+        ...s.run,
+        visibleFieldIndices: finalVisible,
+        activeFieldIndex: nextActive,
+      }
     };
   }),
 
