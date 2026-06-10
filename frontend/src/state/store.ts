@@ -126,7 +126,7 @@ export const useStore = create<Store>((set, get) => ({
   })),
 
   addPde: () => set((s) => {
-    const id = `pde-${Date.now()}`;
+    const id = `pde-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const n = s.system.pdes.length + 1;
     const next: PDEConfig = {
       ...s.system.pdes[0],
@@ -174,7 +174,14 @@ export const useStore = create<Store>((set, get) => ({
   loadPreset: (preset) => set((s) => ({
     system: preset,
     ui: { ...s.ui, dirty: false },
-    run: { ...s.run, status: "pristine", fields: null },
+    run: {
+      ...s.run,
+      status: "pristine",
+      fields: null,
+      error: null,
+      meta: null,
+      lastRunMs: 0
+    },
   })),
 
   setUI: (patch) => set((s) => ({ ui: { ...s.ui, ...patch } })),

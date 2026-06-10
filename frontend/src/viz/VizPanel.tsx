@@ -246,10 +246,14 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange }: Pro
   const empty = !field;
   const solving = status === "solving";
   const showSlider = !empty && (
-    (layoutMode === "grid" && maximizedPanel !== "console") ||
     (layoutMode === "tabs" && (
       ((tab === "plot1d" || tab === "animation") && plotMode !== "all") ||
       (tab === "heatmap" && is2D)
+    )) ||
+    (layoutMode === "grid" && (
+      maximizedPanel === null ||
+      maximizedPanel === "plot1d" ||
+      (maximizedPanel === "plot3d" && is2D)
     ))
   );
 
