@@ -218,7 +218,19 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engin
   const [recording, setRecording] = useState(false);
 
   const startRecording = async () => {
-    const canvas = document.querySelector(".viz-stage canvas") as HTMLCanvasElement;
+    let canvas: HTMLCanvasElement | null = null;
+    if (layoutMode === "tabs") {
+      canvas = document.querySelector(".viz-frame canvas") as HTMLCanvasElement;
+    } else {
+      if (maximizedPanel) {
+        canvas = document.querySelector(`.grid-panel[data-panel="${maximizedPanel}"] canvas`) as HTMLCanvasElement;
+      }
+      if (!canvas) {
+        canvas = document.querySelector(".grid-panel[data-panel=\"plot3d\"] canvas") as HTMLCanvasElement 
+          || document.querySelector(".grid-panel[data-panel=\"heatmap\"] canvas") as HTMLCanvasElement;
+      }
+    }
+
     if (!canvas) {
       alert("No canvas found to record! Video recording is optimized for canvas-based views (Heatmaps, 2D simulation, and 3D surface). Please switch tab/view to record.");
       return;
@@ -522,7 +534,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engin
       <div className="viz-stage">
         {layoutMode === "grid" ? (
           maximizedPanel ? (
-            <div className="grid-panel" style={{ width: "100%", height: "100%" }}>
+            <div className="grid-panel" data-panel={maximizedPanel} style={{ width: "100%", height: "100%" }}>
               {renderPanelHeader(maximizedPanel)}
               <div className="panel-body">
                 {renderPanelBody(maximizedPanel)}
@@ -534,7 +546,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engin
               gridTemplateRows: visiblePanels.length <= 2 ? "1fr" : "repeat(2, 1fr)"
             }}>
               {visiblePanels.map((panelId) => (
-                <div key={panelId} className="grid-panel">
+                <div key={panelId} className="grid-panel" data-panel={panelId}>
                   {renderPanelHeader(panelId)}
                   <div className="panel-body">
                     {renderPanelBody(panelId)}
@@ -577,11 +589,13 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engin
           <div className="bottom-rail" style={{ padding: 0 }}>
             <div className="time-slider">
               <button className="play" aria-label={playing ? "Pause" : "Play"}
+                      disabled={recording}
                       onClick={() => setPlaying(!playing)}>
                 {playing ? <Icon.Pause /> : <Icon.Run />}
               </button>
               <select
                 value={speed}
+                disabled={recording}
                 onChange={(e) => setSpeed(parseFloat(e.target.value))}
                 className="speed-select"
                 aria-label="Playback speed"
@@ -596,6 +610,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engin
               <div className="label">t = {field.ts[tIndex].toFixed(4)}</div>
               <div className="time-track"
                    onClick={(e) => {
+                     if (recording) return; // Prevent clicks during recording
                      const r = e.currentTarget.getBoundingClientRect();
                      const f = (e.clientX - r.left) / r.width;
                      const t0 = field.ts[0];
@@ -629,6 +644,7 @@ export function VizPanel({ palette = "viridis", tab: tabProp, onTabChange, engin
                 step {tIndex + 1}/{field.ts.length}
               </div>
               <button className="play" aria-label="Reset"
+                      disabled={recording}
                       onClick={() => { setTIndex(0); setPlaying(false); }}>
                 <Icon.Reset />
               </button>
