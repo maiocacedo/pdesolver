@@ -542,6 +542,18 @@ sistema.visualize(mode='plot1d_all', func_idx=1, tf=5.0)  # D
 
 > **Important:** In coupled systems, function names used in one equation (e.g. `C` in the equation for `D`) must match the `func` attribute of the corresponding `PDE` object.
 
+## PDE Solver Studio
+
+An interactive desktop graphical application (WebView) is available to build, simulate, and analyze PDE systems visually.
+
+Features:
+- Visual Equation builder and system management
+- Multi-dimensional visualization (1D plot profiles, 2D heatmaps, and 3D surface rendering)
+- Light and Dark theme modes
+- JSON configuration import/export to save and restore workspace states
+
+For pre-compiled binaries and installation guides, visit the [Studio Releases Page](TODO_INSERT_LINK_HERE).
+
 ---
 
 ## License

@@ -1,18 +1,7 @@
 # import time
-import os
-import sys
-
-diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-diretorio_pai = os.path.abspath(os.path.join(diretorio_atual, ".."))
-sys.path.append(diretorio_pai)
-
 import numpy as np
 
-import PDE
-
-# import matplotlib.pyplot as plt
-# import matplotlib.gridspec as gridspec
-from PDES import PDES
+from pdesolver import PDE, PDES
 
 # ---------------------------------------------------------------------------
 # Parâmetros
@@ -28,7 +17,7 @@ X, Y = np.meshgrid(x_lin, y_lin, indexing="ij")
 v = 1.0
 dax = 0.00001
 
-PDE_A = PDE.PDE(
+PDE_A = PDE(
     f"dA/dt = -{v}*(dA/dx) + {dax}*(d2A/dx2 + d2A/dy2) - A*B",
     "A",
     ["x", "y"],
@@ -45,7 +34,7 @@ PDE_A = PDE.PDE(
     south_func_bd="0",
 )
 
-PDE_B = PDE.PDE(
+PDE_B = PDE(
     f"dB/dt = -{v}*(dB/dx) + {dax}*(d2B/dx2 + d2B/dy2) -A*B",
     "B",
     ["x", "y"],
@@ -62,7 +51,7 @@ PDE_B = PDE.PDE(
     south_func_bd="0",
 )
 
-PDE_C = PDE.PDE(
+PDE_C = PDE(
     f"dC/dt = -{v}*(dC/dx) + {dax}*(d2C/dx2 + d2C/dy2) + 2*A*B",
     "C",
     ["x", "y"],
@@ -79,7 +68,7 @@ PDE_C = PDE.PDE(
     south_func_bd="0",
 )
 
-PDE_D = PDE.PDE(
+PDE_D = PDE(
     f"dD/dt = -{v}*(dD/dx) + {dax}*(d2D/dx2 + d2D/dy2) + 2*A*B",
     "D",
     ["x", "y"],

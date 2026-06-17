@@ -2,11 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import pytest
-import os, sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from PDES import PDES
-import PDE
+from pdesolver import PDE, PDES
 
 DISC_N  = [15, 15]
 TF      = 1.0
@@ -31,7 +27,7 @@ def montar_sistema():
     bc_expr = f"1 / (1 + exp((x + y - t) / (2*{NU})))"
     ic_expr = f"1 / (1 + exp((x + y) / (2*{NU})))"
 
-    pde = PDE.PDE(
+    pde = PDE(
         f'dU/dt = -U*dU/dx - U*dU/dy + {NU}*d2U/dx2 + {NU}*d2U/dy2',
         'U', ['x', 'y'], ['t'],
         ivar_boundary=[(0, 1), (0, 1)],

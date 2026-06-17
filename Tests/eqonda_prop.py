@@ -3,14 +3,9 @@ import sys
 
 import numpy as np
 
-diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-diretorio_pai = os.path.abspath(os.path.join(diretorio_atual, ".."))
-sys.path.append(diretorio_pai)
-
 import time
 
-import PDE
-from PDES import PDES
+from pdesolver import PDE, PDES
 
 start_time_df = time.time()
 
@@ -37,7 +32,7 @@ disc_n = [40, 40]
 ic_u = f"exp(-100*(x-{x0})**2)"
 ic_v = f"{200 * c}*(x-{x0})*exp(-100*(x-{x0})**2)"
 
-PDE1 = PDE.PDE(
+PDE1 = PDE(
     "dF/dt = G",
     "F",
     ["x", "y"],
@@ -54,7 +49,7 @@ PDE1 = PDE.PDE(
     south_func_bd="0",
 )
 
-PDE2 = PDE.PDE(
+PDE2 = PDE(
     f"dG/dt = {c**2}*(d2F/dx2 + d2F/dy2)",
     "G",
     ["x", "y"],

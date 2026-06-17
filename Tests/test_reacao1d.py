@@ -2,11 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import pytest
-import os, sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from PDES import PDES
-import PDE
+from pdesolver import PDE, PDES
 
 DISC_N = [15]
 TF     = 5.0
@@ -17,7 +13,7 @@ K      = 0.1
 
 
 def montar_sistema():
-    pde_c = PDE.PDE(
+    pde_c = PDE(
         f'dC/dt = -{V}*(dC/dx) + {DAX}*(d2C/dx2) - {K}*C',
         'C', ['x'], ['t'],
         ivar_boundary=[(0, 1)],
@@ -25,7 +21,7 @@ def montar_sistema():
         west_bd='Dirichlet', west_func_bd='1',
         east_bd='Neumann',   east_func_bd='0',
     )
-    pde_d = PDE.PDE(
+    pde_d = PDE(
         f'dD/dt = -{V}*(dD/dx) + {DAX}*(d2D/dx2) + {K}*C',
         'D', ['x'], ['t'],
         ivar_boundary=[(0, 1)],

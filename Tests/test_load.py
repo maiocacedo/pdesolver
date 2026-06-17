@@ -4,15 +4,10 @@ import time
 
 import numpy as np
 
-diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-diretorio_pai = os.path.abspath(os.path.join(diretorio_atual, ".."))
-sys.path.append(diretorio_pai)
-
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 
-from PDE import PDE
-from PDES import PDES
+from pdesolver import PDE, PDES
 
 PDES1 = PDES.load_from_json("pdes1.json")
 

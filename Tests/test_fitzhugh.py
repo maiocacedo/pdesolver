@@ -3,11 +3,7 @@ import matplotlib
 matplotlib.use('Agg')
 import warnings
 import pytest
-import os, sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from PDES import PDES
-import PDE
+from pdesolver import PDE, PDES
 
 DISC_N = [15, 15]
 TF     = 0.2
@@ -19,7 +15,7 @@ BETA   = 0.7
 
 
 def montar_sistema():
-    pde_u = PDE.PDE(
+    pde_u = PDE(
         f'dU/dt = {DU}*d2U/dx2 + {DU}*d2U/dy2 + U - U**3/3 - V',
         'U', ['x', 'y'], ['t'],
         ivar_boundary=[(0, 1), (0, 1)],
@@ -29,7 +25,7 @@ def montar_sistema():
         north_bd='Neumann', north_func_bd='0',
         south_bd='Neumann', south_func_bd='0',
     )
-    pde_v = PDE.PDE(
+    pde_v = PDE(
         f'dV/dt = {EPS}*(U - {GAMMA}*V + {BETA})',
         'V', ['x', 'y'], ['t'],
         ivar_boundary=[(0, 1), (0, 1)],
