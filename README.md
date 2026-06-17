@@ -21,6 +21,7 @@
 - [Visualization](#visualization)
 - [Import & Export (JSON)](#import--export-json)
 - [Coupled Systems](#coupled-systems)
+- [Pdesolver Studio](#pdesolver-studio)
 
 ---
 
@@ -552,7 +553,7 @@ Features:
 - Light and Dark theme modes
 - JSON configuration import/export to save and restore workspace states
 
-For pre-compiled binaries and installation guides, visit the [Studio Releases Page](TODO_INSERT_LINK_HERE).
+For pre-compiled binaries and installation guides, visit the [Studio Releases Page](https://github.com/maiocacedo/pdesolver-studio).
 
 ---
 
