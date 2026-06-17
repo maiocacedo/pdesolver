@@ -21,7 +21,7 @@
 - [Visualization](#visualization)
 - [Import & Export (JSON)](#import--export-json)
 - [Coupled Systems](#coupled-systems)
-- [Pdesolver Studio](#pdesolver-studio)
+- [PDE Solver Studio](#pde-solver-studio)
 
 ---
 
