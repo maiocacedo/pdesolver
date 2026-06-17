@@ -3,11 +3,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg') 
 import pytest
-import os, sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from PDES import PDES
-import PDE
+from pdesolver import PDE, PDES
 
 DISC_N   = [15, 15]
 TF       = 1.0
@@ -30,7 +26,7 @@ def mae(numerica, analitica):
 
 
 def montar_sistema():
-    pde = PDE.PDE(
+    pde = PDE(
         f'dF/dt = {ALPHA_X}*d2F/dx2 + {ALPHA_Y}*d2F/dy2',
         'F', ['x', 'y'], ['t'],
         ivar_boundary=[(0, 1), (0, 1)],
