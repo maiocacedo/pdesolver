@@ -5,8 +5,15 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/pdesolver.svg)](https://pypi.org/project/pdesolver/)
+[![CI](https://github.com/maiocacedo/PDESsolver/actions/workflows/ci.yml/badge.svg)](https://github.com/maiocacedo/PDESsolver/actions/workflows/ci.yml)
 
 ---
+
+## Overview
+
+**pdesolver** is designed for researchers, students, and educators in computational science who need to solve partial differential equations numerically without the steep learning curve of full-scale FEM frameworks like FEniCS or PETSc. It bridges the gap between symbolic mathematics (SymPy) and production numerical solvers by letting users define PDEs in an intuitive string notation and automatically handling discretization, boundary condition assembly, and time integration.
+
+**Target audience:** Anyone working with 1D or 2D time-dependent PDEs who wants a Pythonic, accessible tool that "just works" from equation to visualization in a few lines of code.
 
 ## Table of Contents
 
@@ -552,9 +559,38 @@ Features:
 - Light and Dark theme modes
 - JSON configuration import/export to save and restore workspace states
 
-For pre-compiled binaries and installation guides, visit the [Studio Releases Page](TODO_INSERT_LINK_HERE).
+For pre-compiled binaries and installation guides, visit the [Studio Releases Page](https://github.com/maiocacedo/PDESsolver/releases).
 
 ---
+
+## Citation
+
+If you use pdesolver in your research, please cite it:
+
+```bibtex
+@software{pdesolver,
+  author = {Macedo, Caio},
+  title = {pdesolver: Symbolic PDE solver using finite difference discretization},
+  url = {https://github.com/maiocacedo/PDESsolver},
+  version = {0.1.9},
+  year = {2026}
+}
+```
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to:
+- Report bugs and request features
+- Set up a development environment
+- Submit pull requests
+
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Support
+
+- **Bug reports:** [GitHub Issues](https://github.com/maiocacedo/PDESsolver/issues)
+- **Feature requests:** [GitHub Issues](https://github.com/maiocacedo/PDESsolver/issues)
+- **Questions:** Open an issue with the `[QUESTION]` prefix
 
 ## License
 
