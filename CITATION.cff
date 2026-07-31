@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it using the metadata below."
+authors:
+  - family-names: "Macedo"
+    given-names: "Caio"
+    orcid: "https://orcid.org/0009-0005-6840-5148"
+    affiliation: "Universidade Tecnológica Federal do Paraná (UTFPR)"
+title: "pdesolver: Symbolic PDE solver using finite difference discretization"
+version: "0.1.9"
+date-released: 2026-07-31
+url: "https://github.com/maiocacedo/PDESsolver"
+repository-code: "https://github.com/maiocacedo/PDESsolver"
+license: MIT
+keywords:
+  - partial-differential-equations
+  - finite-differences
+  - numerical-methods
+  - scientific-computing
+  - python

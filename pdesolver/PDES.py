@@ -1,11 +1,11 @@
 import json
 
 import matplotlib
-try:
-    if matplotlib.get_backend().lower() == "agg":
+if matplotlib.get_backend().lower() == "agg":
+    try:
         matplotlib.use("TkAgg")
-except Exception:
-    pass
+    except ImportError:
+        pass  # TkAgg not available, keep Agg backend
 import numpy as np
 import sympy as sp
 
@@ -20,6 +20,24 @@ from .Solvers.solver_base import detect_linearity_symbolic
 
 
 class PDES:
+    """System of coupled partial differential equations.
+
+    Manages one or more :class:`PDE` objects, orchestrating spatial
+    discretization, time integration, and visualization.
+
+    Parameters
+    ----------
+    pdes : list of PDE
+        List of PDE objects defining the system.
+    disc_n : list of int
+        Number of grid points per spatial dimension.
+
+    Examples
+    --------
+    >>> sistema = PDES(pdes=[pde], disc_n=[50])
+    >>> sistema.discretize(method='central')
+    >>> sistema.solve(method='bdf2', tf=0.1, nt=100)
+    """
     @property
     def disc_n(self):
         return self._disc_n
@@ -70,6 +88,14 @@ class PDES:
         return nvars
 
     def discretize(self, method="central"):
+        """Discretize spatial derivatives using finite differences.
+
+        Parameters
+        ----------
+        method : str, optional
+            Finite difference scheme: ``'central'``, ``'forward'``, or
+            ``'backward'``. Default is ``'central'``.
+        """
         flat_list, d_vars, dirichlet_constraints, neumann_constraints = df(
             self,
             self.disc_n,
@@ -88,6 +114,31 @@ class PDES:
         self.neumann_constraints = neumann_constraints
 
     def solve(self, method="bdf2", tf=1.0, nt=100, tol=1e-6, verbose=False, **kwargs):
+        """Integrate the discretized system in time.
+
+        Parameters
+        ----------
+        method : str, optional
+            Time integration method: ``'bdf2'``, ``'CN'``, or ``'RKF'``.
+        tf : float, optional
+            Final time.
+        nt : int, optional
+            Number of time steps.
+        tol : float, optional
+            Tolerance for adaptive methods (RKF).
+        verbose : bool, optional
+            Print solver progress.
+
+        Returns
+        -------
+        list of numpy.ndarray
+            Solution arrays, one per PDE function.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is not one of the supported methods.
+        """
         dt = tf / nt
         dc = self.dirichlet_constraints
         nc = getattr(self, "neumann_constraints", {})
@@ -145,21 +196,40 @@ class PDES:
             )
         else:
             raise ValueError(
-                f"Metodo '{method}' desconhecido. Use: 'bdf2', 'CN' ou 'RKF'."
+                f"Unknown method '{method}'. Use: 'bdf2', 'CN', or 'RKF'."
             )
         return self.results
 
     def visualize(self, mode="heatmap", func_idx=0, time_step=-1, **kwargs):
+        """Visualize the solution.
+
+        Parameters
+        ----------
+        mode : str, optional
+            Visualization mode: ``'heatmap'``, ``'surface'``, ``'profile'``,
+            or ``'animation'``.
+        func_idx : int, optional
+            Index of the PDE function to visualize.
+        time_step : int, optional
+            Time step to visualize. ``-1`` for the last step.
+        """
         _visualize(self, mode=mode, func_idx=func_idx, time_step=time_step, **kwargs)
 
     def __repr__(self):
-        status = "resolvido" if self.results is not None else "nao resolvido"
+        status = "solved" if self.results is not None else "not solved"
         return (
             f"PDES(funcs={self.funcs}, disc_n={self.disc_n}, "
             f"sp_vars={self.sp_vars}, status='{status}')"
         )
 
     def save_to_json(self, filepath="pdes1.json"):
+        """Save the system state to a JSON file.
+
+        Parameters
+        ----------
+        filepath : str, optional
+            Path to the output JSON file.
+        """
         data = {
             "disc_n": list(self.disc_n),
             "pdes": [pde.__dict__ for pde in self.pdes],
@@ -168,10 +238,24 @@ class PDES:
         }
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, cls=PDESEncoder, indent=4, ensure_ascii=False)
-        print(f"Objeto salvo com sucesso em: {filepath}")
+        print(f"System saved successfully to: {filepath}")
 
     @classmethod
     def load_from_json(cls, filepath, pde_class=PDE):
+        """Load a system from a previously saved JSON file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the JSON file.
+        pde_class : type, optional
+            PDE class to use for reconstruction.
+
+        Returns
+        -------
+        PDES
+            Reconstructed system.
+        """
         import inspect
 
         with open(filepath, "r", encoding="utf-8") as f:
