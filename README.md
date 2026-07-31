@@ -559,7 +559,7 @@ Features:
 - Light and Dark theme modes
 - JSON configuration import/export to save and restore workspace states
 
-For pre-compiled binaries and installation guides, visit the [Studio Releases Page](https://github.com/maiocacedo/PDESsolver/releases).
+For pre-compiled binaries and installation guides, visit the [Studio Releases Page](https://github.com/maiocacedo/pdesolver-studio/releases/).
 
 ---
 

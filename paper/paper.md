@@ -8,10 +8,10 @@ tags:
   - scientific computing
 authors:
   - name: Caio Macedo
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0005-6840-5148
     affiliation: 1
 affiliations:
-  - name: TODO_AFFILIATION
+  - name: Universidade Tecnológica Federal do Paraná (UTFPR)
     index: 1
 date: 31 July 2026
 bibliography: paper.bib
@@ -65,10 +65,11 @@ and GPU acceleration via CuPy.
 
 # AI Usage Disclosure
 
-<!-- TODO: Author must complete this section honestly. Template:
-"[Generative AI tools were / were not] used in the development of this software.
-[If used: Tool X was used for Y. All outputs were reviewed and validated by the authors.]"
--->
+Generative AI tools were used to assist in the development of this software,
+specifically to follow expected coding standards and conventions, and to optimize
+the implemented algorithms. Additionally, AI assistants were used extensively 
+in a pair-programming approach to help build the companion PDE Solver Studio. 
+All AI-generated outputs were reviewed and validated by the author.
 
 # Acknowledgements
 

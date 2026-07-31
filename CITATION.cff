@@ -3,6 +3,8 @@ message: "If you use this software in your research, please cite it using the me
 authors:
   - family-names: "Macedo"
     given-names: "Caio"
+    orcid: "https://orcid.org/0009-0005-6840-5148"
+    affiliation: "Universidade Tecnológica Federal do Paraná (UTFPR)"
 title: "pdesolver: Symbolic PDE solver using finite difference discretization"
 version: "0.1.9"
 date-released: 2026-07-31
