@@ -1,24 +1,67 @@
+"""Tests for JSON save/load round-trip functionality."""
+
 import os
-import sys
-import time
+import tempfile
+
+import matplotlib
+matplotlib.use("Agg")
 
 import numpy as np
-
-import matplotlib.gridspec as gridspec
-import matplotlib.pyplot as plt
-
+import pytest
 from pdesolver import PDE, PDES
 
-PDES1 = PDES.load_from_json("pdes1.json")
 
-print(PDES1.funcs)
-PDES1.disc_n = [10, 10]
-print(PDES1.disc_n)
-print(PDES1.ic)
-print(PDES1.pdes[0].west_func_bd)
+@pytest.fixture
+def sample_system():
+    """Create a simple 2D heat equation system for testing."""
+    pde = PDE(
+        eq="dF/dt = 0.1*d2F/dx2 + 0.2*d2F/dy2",
+        func="F",
+        sp_var=["x", "y"],
+        ivar=["t"],
+        ivar_boundary=[(0, 1), (0, 1)],
+        expr_ic="sin(pi * x) * sin(pi * y)",
+        west_bd="Dirichlet", west_func_bd="0",
+        east_bd="Dirichlet", east_func_bd="0",
+        north_bd="Dirichlet", north_func_bd="0",
+        south_bd="Dirichlet", south_func_bd="0",
+    )
+    sistema = PDES([pde], [10, 10])
+    sistema.discretize(method="central")
+    sistema.solve(method="bdf2", tf=0.1, nt=10)
+    return sistema
 
-PDES1.discretize(method="central")
-PDES1.solve(tf=0.1, nt=10)
+
+def test_save_load_roundtrip(sample_system, tmp_path):
+    """Test that saving and loading preserves system state."""
+    filepath = str(tmp_path / "test_output.json")
+    sample_system.save_to_json(filepath)
+
+    loaded = PDES.load_from_json(filepath)
+
+    assert loaded.funcs == sample_system.funcs
+    assert loaded.disc_n == sample_system.disc_n
+    assert loaded.pdes[0].eq == sample_system.pdes[0].eq
+    assert loaded.pdes[0].west_bd == sample_system.pdes[0].west_bd
+    assert loaded.results is not None
 
 
-PDES1.visualize()
+def test_load_results_shape(sample_system, tmp_path):
+    """Test that loaded results have the correct shape."""
+    filepath = str(tmp_path / "test_output.json")
+    sample_system.save_to_json(filepath)
+
+    loaded = PDES.load_from_json(filepath)
+    assert len(loaded.results) == len(sample_system.results)
+
+
+def test_load_can_rediscretize(sample_system, tmp_path):
+    """Test that a loaded system can be re-discretized and re-solved."""
+    filepath = str(tmp_path / "test_output.json")
+    sample_system.save_to_json(filepath)
+
+    loaded = PDES.load_from_json(filepath)
+    loaded.disc_n = [5, 5]
+    loaded.discretize(method="central")
+    loaded.solve(method="bdf2", tf=0.1, nt=10)
+    assert loaded.results is not None
