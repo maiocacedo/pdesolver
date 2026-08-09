@@ -1,12 +1,14 @@
 from .boundary_base import BoundaryCondition
 from .dirichlet import DirichletBC
 from .neumann import NeumannBC
+from .periodic import PeriodicBC
 from .robin import RobinBC
 
 
 BOUNDARY_REGISTRY: dict[str, type[BoundaryCondition]] = {
     "dirichlet": DirichletBC,
     "neumann": NeumannBC,
+    "periodic": PeriodicBC,
     "robin": RobinBC,
 }
 
@@ -38,6 +40,7 @@ __all__ = [
     "BoundaryCondition",
     "DirichletBC",
     "NeumannBC",
+    "PeriodicBC",
     "RobinBC",
     "BOUNDARY_REGISTRY",
     "get_boundary",

@@ -35,49 +35,56 @@ class DirichletBC(BoundaryCondition):
 
     def _apply_2d(self, bd, list_eq, n_part, xd_var, str_sp_vars):
         Nx, Ny = n_part[0], n_part[1]
-        hx = f"h{xd_var[0]}_"
-        hy = f"h{xd_var[0]}_"
         result = [[] for _ in range(len(list_eq))]
 
         if bd == "north":
             for func in range(len(list_eq)):
                 for i in range(Nx):
-                    expr = self._replace_xy(self.bd_func, f"{i} * {hx}", f"{Ny-1} * {hy}", str_sp_vars)
+                    expr = self._replace_xy(
+                        self.bd_func, f"CX_{i}", f"CY_{Ny - 1}", str_sp_vars
+                    )
                     result[func].append(expr)
 
         elif bd == "south":
             for func in range(len(list_eq)):
                 for i in range(Nx):
-                    expr = self._replace_xy(self.bd_func, f"{i} * {hx}", f"0 * {hy}", str_sp_vars)
+                    expr = self._replace_xy(
+                        self.bd_func, f"CX_{i}", "CY_0", str_sp_vars
+                    )
                     result[func].append(expr)
 
         elif bd == "east":
             for func in range(len(list_eq)):
                 for j in range(Ny):
-                    expr = self._replace_xy(self.bd_func, f"{Nx-1} * {hx}", f"{j} * {hy}", str_sp_vars)
+                    expr = self._replace_xy(
+                        self.bd_func, f"CX_{Nx - 1}", f"CY_{j}", str_sp_vars
+                    )
                     result[func].append(expr)
 
         elif bd == "west":
             for func in range(len(list_eq)):
                 for j in range(Ny):
-                    expr = self._replace_xy(self.bd_func, f"0 * {hx}", f"{j} * {hy}", str_sp_vars)
+                    expr = self._replace_xy(
+                        self.bd_func, "CX_0", f"CY_{j}", str_sp_vars
+                    )
                     result[func].append(expr)
 
         return result
 
     def _apply_1d(self, bd, list_eq, n_part, xd_var, str_sp_vars):
         Nx = n_part[0]
-        hx = f"h{xd_var[0]}_"
         result = [[] for _ in range(len(list_eq))]
 
         if bd == "west":
             for func in range(len(list_eq)):
-                expr = self._replace_xy(self.bd_func, f"0 * {hx}", "", str_sp_vars)
+                expr = self._replace_xy(self.bd_func, "CX_0", "", str_sp_vars)
                 result[func].append(expr)
 
         elif bd == "east":
             for func in range(len(list_eq)):
-                expr = self._replace_xy(self.bd_func, f"{Nx-1} * {hx}", "", str_sp_vars)
+                expr = self._replace_xy(
+                    self.bd_func, f"CX_{Nx - 1}", "", str_sp_vars
+                )
                 result[func].append(expr)
 
         return result
