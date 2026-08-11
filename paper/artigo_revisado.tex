@@ -1,0 +1,466 @@
+\documentclass[10pt,brazil,english]{article}
+\usepackage{amsfonts}
+\usepackage{infocomp}
+\usepackage{times}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english, portuguese]{babel}
+\addto\captionsportuguese{
+\renewcommand{\figurename}{Figura}
+\renewcommand{\tablename}{Tabela}
+\renewcommand{\refname}{REFERÊNCIAS}
+}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumerate}
+\usepackage{caption}
+\usepackage[sort]{cite}
+\usepackage[alf,abnt-repeated-author-omit=yes,abnt-etal-list=5]{abntex2cite}
+\usepackage{lineno}
+\linenumbers
+\usepackage{booktabs}
+\usepackage{adjustbox}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds}
+\usepackage{fancyhdr}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!8},
+}
+
+\sloppy
+\renewcommand{\captionfont}{\footnotesize}
+\renewcommand{\captionlabelfont}{\footnotesize \bfseries}
+
+\newtheorem{exemplo}{Exemplo}
+
+\title{PDESOLVER: UMA BIBLIOTECA PYTHON COM INTERFACE SIMBÓLICA E DISCRETIZAÇÃO AUTOANALISÁVEL PARA SISTEMAS DE EDPs}
+
+\address{
+$^{1}$Universidade Tecnológica Federal do Paraná ---
+\textit{Campus} Santa Helena \\
+Coordenação do Curso de Bacharelado em Ciência da Computação\\
+\emph{caio@alunos.utfpr.edu.br}\\[4pt]
+$^{2}$Universidade Estadual do Oeste do Paraná ---
+\textit{Campus} Cascavel \\
+Programa de Pós-Graduação em Educação em Ciências e Educação Matemática\\
+\emph{antonio.ignacio@unioeste.br}\\[4pt]
+$^{3}$Universidade Tecnológica Federal do Paraná ---
+\textit{Campus} Santa Helena \\
+Coordenação do Curso de Bacharelado em Ciência da Computação\\
+\emph{enakajima@utfpr.edu.br}
+}
+
+\author{
+  Caio Macedo Lima da Cruz$^{1}$ \and
+  Antonio Augusto Ignacio$^{2}$\and
+  Evandro Alves Nakajima$^{3}$
+}
+
+\selectlanguage{brazil}
+\resumo{Este trabalho apresenta o PDESolver, uma biblioteca de código aberto, escrita em Python, para a solução numérica de sistemas de equações diferenciais parciais evolutivas, de primeira ordem no tempo, em domínios retangulares uni e bidimensionais. A interface simbólica permite especificar equações, condições iniciais e condições de contorno em notação matemática direta. A discretização espacial emprega diferenças finitas com contornos de Dirichlet, Neumann, Robin e periódicos, malhas uniformes ou estiradas e derivadas mistas de segunda ordem. Duas implementações independentes da mesma discretização são disponibilizadas: uma que gera uma expressão algébrica por nó da malha, e outra vetorizada cujo custo simbólico independe do tamanho da malha, executável em CPU ou GPU. As duas concordam até a precisão de máquina, o que as torna verificação mútua. A representação simbólica é ainda empregada para derivar automaticamente o erro de truncamento, a difusão numérica introduzida pelo esquema e o limite de estabilidade do passo temporal. Em quatro problemas de referência, a biblioteca apresenta acurácia equivalente à de FiPy e py-pde com tempo de execução uma a duas ordens de grandeza menor, e a implementação vetorizada torna tratáveis malhas de $321\times321$, inviáveis na abordagem por nó.}
+
+\palchaves{Equações diferenciais parciais. Diferenças finitas. Interface simbólica. Análise de discretização. Aceleração por GPU.}
+
+\selectlanguage{english}
+\abstract{This work presents PDESolver, an open-source Python library for the numerical solution of systems of evolution partial differential equations, first order in time, on one- and two-dimensional rectangular domains. Its symbolic interface lets users specify equations, initial conditions and boundary conditions in direct mathematical notation. Spatial discretisation uses finite differences with Dirichlet, Neumann, Robin and periodic boundaries, uniform or stretched meshes, and second-order mixed derivatives. Two independent implementations of the same discretisation are provided: one that emits one algebraic expression per grid node, and a vectorised one whose symbolic cost is independent of mesh size and which runs on CPU or GPU. The two agree to machine precision, and therefore verify one another. The symbolic representation is further used to derive automatically the truncation error, the numerical diffusion the scheme introduces, and the stability limit on the time step. On four benchmark problems the library attains accuracy equivalent to FiPy and py-pde with execution time one to two orders of magnitude lower, and the vectorised path makes $321\times321$ meshes tractable, which the node-wise approach cannot reach.}
+
+\keywords{Partial differential equations. Finite differences. Symbolic interface. Discretisation analysis. GPU acceleration.}
+
+\begin{document}
+
+\maketitle
+\onecolumn
+
+\section{INTRODUÇÃO}
+
+Equações diferenciais parciais de primeira ordem no tempo descrevem uma ampla classe de fenômenos físicos: transferência de calor e massa e propagação de ondas \cite{strikwerda2004,leveque2007}, dinâmica de reação-difusão e propagação de frentes em meios excitáveis \cite{hundsdorfer2003}, e acoplamentos em sistemas biológicos e ambientais \cite{okubo2001}. A solução numérica dessas equações por diferenças finitas converte os operadores diferenciais em sistemas algébricos esparsos cuja estrutura depende criticamente do esquema de discretização espacial e do integrador temporal \cite{morton1994,hundsdorfer2003}.
+
+Pacotes de uso geral como NumPy \cite{harris2020} e SciPy \cite{SciPy2020} fornecem as primitivas necessárias, mas não abstraem a construção do solver. Bibliotecas dedicadas a EDPs em Python, como FiPy \cite{guyer2009} e py-pde \cite{zwicker2020}, reduzem esse esforço por meio de interfaces baseadas em operadores ou expressões textuais. Cada uma, porém, cobre um subconjunto distinto de recursos: o FiPy é fundamentado em volumes finitos com operadores fixos (\texttt{DiffusionTerm}, \texttt{ConvectionTerm}), o que impede a expressão direta de termos não-lineares envolvendo derivadas espaciais e não dispõe de termo para derivadas mistas; o py-pde admite notação textual expressiva e derivadas mistas, mas restringe-se a malhas uniformes e não oferece mecanismo declarativo para atribuir equações distintas a regiões do domínio. A Seção~\ref{sec:capacidades} apresenta essa comparação de forma sistemática e verificada experimentalmente.
+
+Este trabalho apresenta o \textbf{PDESolver}, uma biblioteca Python de código aberto para sistemas acoplados de equações evolutivas em domínios uni e bidimensionais. As contribuições são:
+
+\begin{enumerate}[(i)]
+\item uma interface simbólica que aceita equações em notação matemática direta, incluindo termos não-lineares arbitrários e derivadas mistas de segunda ordem, com contornos de Dirichlet, Neumann, Robin e periódicos, sobre malhas uniformes ou estiradas;
+
+\item \textbf{duas implementações independentes da mesma discretização} --- uma por nó, que representa o sistema como expressões algébricas individuais e admite equação própria em regiões arbitrárias; e uma vetorizada, cujo custo simbólico independe do tamanho da malha e que executa em CPU ou GPU sem alteração de código. As duas concordam até a precisão de máquina, e portanto verificam uma à outra;
+
+\item \textbf{análise automática da discretização}: a partir dos momentos do estêncil e da equação escrita pelo usuário, a biblioteca deriva o erro de truncamento, a difusão numérica introduzida pelo esquema (com sinal) e o limite de estabilidade do passo temporal, antes de qualquer integração;
+
+\item \textbf{seleção automática do integrador a partir dessa análise}: os termos que forçam a redução do passo são identificados simbolicamente e tratados implicitamente, enquanto os demais permanecem explícitos, com o estágio implícito resolvido por transformada de senos quando a estrutura o permite.
+\end{enumerate}
+
+A biblioteca é distribuída sob licença MIT no PyPI (\texttt{pip install pdesolver}) e no GitHub, com suíte de benchmarks e ambiente reprodutível (contêiner e caderno Colab) publicados junto.
+
+\section{FUNDAMENTAÇÃO TEÓRICA}
+
+\subsection{Formulação Geral}
+
+Considera-se um sistema de $N$ equações evolutivas acopladas sobre um domínio espacial $\Omega \subset \mathbb{R}^d$, $d \in \{1, 2\}$, e intervalo $t \in [0, T]$:
+\begin{equation}
+  \frac{\partial u_i}{\partial t} = \mathcal{F}_i\!\left(u_1, \ldots,
+  u_N,\, \nabla u_i,\, \nabla^2 u_i,\, \partial_{xy} u_i,\, \mathbf{x},\, t\right),
+  \quad i = 1, \ldots, N.
+  \label{eq:edp_geral}
+\end{equation}
+Equações hiperbólicas de segunda ordem se encaixam quando reescritas como sistemas de primeira ordem: $\partial_{tt} u = c^2 \partial_{xx} u$ equivale a $\partial_t u = v$, $\partial_t v = c^2 \partial_{xx} u$.
+
+\subsection{Discretização Espacial em Malhas Gerais}
+\label{sec:pesos}
+
+Seja um eixo com nós $x_0 < x_1 < \cdots < x_{n-1}$, não necessariamente equiespaçados, e defina $h^-_i = x_i - x_{i-1}$ e $h^+_i = x_{i+1} - x_i$. Os pesos interpolatórios exatos de três pontos são
+\begin{align}
+  \partial_x u|_i &\approx \frac{-h^+}{h^-(h^-+h^+)}u_{i-1}
+   + \frac{h^+-h^-}{h^-h^+}u_i + \frac{h^-}{h^+(h^-+h^+)}u_{i+1},
+   \label{eq:w1}\\
+  \partial_{xx} u|_i &\approx \frac{2}{h^-(h^-+h^+)}u_{i-1}
+   - \frac{2}{h^-h^+}u_i + \frac{2}{h^+(h^-+h^+)}u_{i+1}.
+   \label{eq:w2}
+\end{align}
+Para $h^- = h^+ = h$ ambas recaem exatamente nas fórmulas clássicas centradas, de modo que um único caminho de código cobre malhas uniformes e estiradas.
+
+Uma propriedade da Equação~(\ref{eq:w1}) merece registro. Calculando os momentos $C_k = \sum_j w_j d_j^k / k!$ do estêncil, obtém-se $C_0 = 0$, $C_1 = 1$ e --- identicamente, para quaisquer $h^-$ e $h^+$ ---
+\begin{equation}
+  C_2 = 0, \qquad C_3 = \frac{h^-h^+}{6},
+  \label{eq:momentos}
+\end{equation}
+isto é, o termo em $u''$ se cancela e a primeira derivada permanece de segunda ordem em malha arbitrária. A fórmula centrada ingênua $(u_{i+1}-u_{i-1})/(h^-+h^+)$ não possui esse cancelamento e degrada para primeira ordem assim que o espaçamento varia.
+
+A derivada mista é obtida por composição dos operadores de primeira ordem em cada eixo, $\partial_{xy} \approx D_y D_x$, o que para malha uniforme recai no estêncil cruzado padrão de quatro pontos.
+
+Distribuições de nós disponíveis: uniforme, Chebyshev--Gauss--Lobatto e estiramento hiperbólico simétrico ou unilateral, além de conjuntos fornecidos pelo usuário.
+
+\subsection{Condições de Contorno}
+
+São suportados, de forma independente por face, os tipos de Dirichlet ($u|_{\partial\Omega} = g$), Neumann ($\partial_n u|_{\partial\Omega} = q$) e Robin ($\alpha u + \beta \partial_n u = g$), com $g$, $q$, $\alpha$ e $\beta$ admitindo expressões simbólicas em $x$, $y$ e $t$. Contornos periódicos são propriedade do \emph{eixo}, não da face: ambos os lados devem ser declarados em conjunto, e o eixo passa a conter $n$ nós cobrindo $[a,b)$, sem duplicar o extremo --- duplicá-lo tornaria o sistema singular.
+
+Nos métodos implícitos, os valores de Dirichlet são impostos no lado direito do sistema linear, e não apenas sobrescritos após a solução. A distinção não é cosmética: sobrescrever a posteriori corrige o nó de fronteira mas não os vizinhos interiores, já resolvidos acoplados a um valor incorreto, o que introduz erro $\mathcal{O}(\Delta t)$ proporcional ao valor de contorno.
+
+\subsection{Integração Temporal}
+
+Estão disponíveis BDF2 (Eq.~\ref{eq:bdf2}), Crank-Nicolson (Eq.~\ref{eq:cn}) e Runge-Kutta-Fehlberg adaptativo \cite{fehlberg1969}:
+\begin{equation}
+  \frac{3u^{n+1} - 4u^n + u^{n-1}}{2\Delta t} = F(u^{n+1}),
+  \label{eq:bdf2}
+\end{equation}
+\begin{equation}
+  \frac{u^{n+1} - u^n}{\Delta t} = \tfrac{1}{2}\left[F(u^{n+1}) + F(u^n)\right].
+  \label{eq:cn}
+\end{equation}
+Para sistemas lineares, $A = I - \alpha \Delta t\, L$ é fatorada uma única vez por decomposição LU esparsa \cite{SciPy2020}; para não-lineares, emprega-se o método de Newton com Jacobiano esparso obtido por coloração estrutural.
+
+\section{A BIBLIOTECA PDESOLVER}
+
+\subsection{Arquitetura e Interface}
+
+O PDESolver (v0.2.0) organiza-se em seis módulos: \texttt{PDE} e \texttt{PDES} (modelo do problema), \texttt{Disc} (malha e discretização espacial, via SymPy \cite{meurer2017}), \texttt{Solvers}, \texttt{Analysis} e \texttt{Auxs} (visualização via Matplotlib \cite{hunter2007}).
+
+\begin{lstlisting}[float=htb, showstringspaces=false, language=Python]
+from pdesolver import PDE, PDES
+eq = PDE(eq = "dU/dt = 0.1*d2U/dx2",
+         func = "U", sp_var = ["x"], ivar = ["t"],
+         ivar_boundary = [(0, 1)], expr_ic = "0",
+         west_bd = "Dirichlet", west_func_bd = "1",
+         east_bd = "Neumann",   east_func_bd = "0")
+sim = PDES([eq], disc_n=[21])
+sim.discretize(method="central")
+sim.solve(method="bdf2", tf=1.0, nt=400)
+\end{lstlisting}
+
+\subsection{Duas Implementações da Mesma Discretização}
+\label{sec:backends}
+
+A discretização é acessível por dois caminhos, selecionados pelo parâmetro \texttt{backend}.
+
+O caminho \textbf{por nó} (\texttt{'symbolic'}) emite uma expressão algébrica independente para cada ponto da malha. O sistema resultante é uma lista de expressões inspecionáveis e editáveis, o que permite atribuir equação própria a nós arbitrários. Seu custo simbólico, contudo, cresce com a malha, ainda que a EDP não mude: o mesmo estêncil é rederivado em cada ponto.
+
+O caminho \textbf{vetorizado} (\texttt{'stencil'}) analisa cada EDP \emph{uma única vez}, convertendo-a em uma expressão sobre campos de derivada $(u, u_x, u_{xx}, u_y, u_{yy}, u_{xy})$ avaliada sobre arrays inteiros. O custo simbólico passa a ser $\mathcal{O}(N_{\text{eq}})$, independente da malha. Como a expressão é neutra quanto ao módulo de arranjos, o mesmo código executa em NumPy ou CuPy.
+
+Por serem implementações independentes da mesma matemática, os dois caminhos \textbf{verificam um ao outro}. A suíte de testes compara seus lados direitos em todos os tipos de contorno, distribuições de malha, sistemas acoplados e esquemas de diferenças, exigindo concordância na ordem de $10^{-13}$.
+
+\subsection{Regiões Heterogêneas}
+\label{sec:regioes}
+
+O caminho por nó admite equações distintas em regiões do domínio:
+
+\begin{lstlisting}[float=htb, showstringspaces=false, language=Python]
+X, Y = sim.grid.coords()
+bloco = (abs(X - 0.5) < 0.12) & (abs(Y - 0.5) < 0.12)
+sim.discretize(method="central",
+               regions=[{"where": bloco, "eq": "dU/dt = 0"}])
+\end{lstlisting}
+
+Isso cobre obstáculos internos, domínios mascarados, física distinta por sub-região e fontes pontuais. Um caso exige controle mais fino: a interface entre materiais de condutividades $k_1$ e $k_2$. A forma expandida $k\,\partial_{xx}u$ só equivale a $\partial_x(k\,\partial_x u)$ quando $k$ é diferenciável; com $k$ descontínuo é necessária a forma conservativa
+\begin{equation}
+  \frac{k_2 u_{i+1} - (k_1+k_2)u_i + k_1 u_{i-1}}{h^2},
+  \label{eq:conservativa}
+\end{equation}
+que exige \emph{pesos distintos em cada vizinho de um mesmo nó} --- estrutura que o caminho vetorizado, por construção, não expressa. Como a lista de expressões é editável, basta reescrever a entrada correspondente. A Seção~\ref{sec:interface} quantifica a diferença.
+
+\subsection{Análise Automática da Discretização}
+\label{sec:analise}
+
+Por manter a equação em forma simbólica, a biblioteca analisa a própria discretização. Dos momentos do estêncil deriva-se o erro de truncamento e a ordem formal; dos coeficientes da equação do usuário, a difusão numérica introduzida pelo esquema, \emph{com sinal}; e do símbolo de Fourier do estêncil combinado ao polinômio de estabilidade do tableau de Butcher, o limite do passo temporal para a equação como escrita:
+
+\begin{lstlisting}[float=htb, showstringspaces=false, language=Python]
+sim.analyze()
+\end{lstlisting}
+\begin{lstlisting}[float=htb]
+[analise] Discretizacao
+  du/dx   esquema 'backward' -- erro O(h^1), termo lider -h/2*u^(2)
+[analise] Difusao numerica introduzida pelo esquema
+  de du/dx: adiciona 1.000e-02 vs fisica 1.000e-02 (100.0%)
+[analise] Estabilidade
+  RKF: dt_max = 1.839e-02 (simbolo de Fourier, |z| = 3.6777)
+  espectro do operador montado: dt_max = 1.966e-02
+\end{lstlisting}
+
+O relatório informa que, naquela malha, o esquema regressivo contribui tanta difusão quanto a viscosidade física --- diagnóstico que um estudo de convergência não fornece. Esquemas antidifusivos e modos com crescimento são sinalizados explicitamente, assim como o número de Péclet de célula.
+
+\section{EXPERIMENTOS NUMÉRICOS}
+
+\subsection{Configuração}
+
+Os experimentos foram conduzidos em um Intel Core i7-14700K (20 núcleos físicos, 28 \textit{threads}) sob Windows~11, com Python~3.13.7, NumPy~2.4.2, SciPy~1.17.1, SymPy~1.14.0, FiPy~4.0.2 e py-pde~0.56.0. Cada medida descarta duas execuções de aquecimento e reporta a \textbf{mediana} e o \textbf{mínimo} de 25 repetições, além do coeficiente de variação; medidas com CV superior a 5\% são sinalizadas e não devem ser usadas como referência. A suíte imprime ainda um número de calibração (mediana do produto de matrizes $600\times600$: $2{,}18\times10^{-3}$~s nesta máquina) para permitir comparação entre equipamentos. A acurácia é medida pelo RMSE, com cada biblioteca avaliada contra a solução de referência \emph{nos seus próprios nós}, de modo que o erro reportado reflita discretização e não interpolação.
+
+\paragraph{Esquema temporal do FiPy.}
+Uma observação metodológica é necessária. A construção \texttt{TransientTerm() == DiffusionTerm(...)} resolvida com \texttt{eq.solve()} é \textbf{totalmente implícita}, de primeira ordem no tempo, e não Crank-Nicolson. Comparar métodos de segunda ordem contra ela superestima a diferença de acurácia pela razão entre as ordens temporais. Reportamos por isso o FiPy sob os dois esquemas, identificados como \texttt{FiPy/Euler} e \texttt{FiPy/CN}, sendo este último
+\begin{lstlisting}[language=Python, showstringspaces=false]
+eq = (TransientTerm() == DiffusionTerm(coeff=0.5*alpha)
+      + 0.5*alpha*phi.faceGrad.divergence)
+\end{lstlisting}
+A comparação justa de acurácia é contra \texttt{FiPy/CN}.
+
+\subsection{Acurácia e Desempenho}
+
+A Tabela~\ref{tab:resultados} apresenta os quatro problemas de referência com solução fechada ou de referência de alta ordem: calor 1D e 2D, advecção-difusão e Burgers viscosa. As colunas \texttt{/nó} e \texttt{/vet} identificam o caminho de discretização.
+
+\begin{table}[!htb]
+\centering
+\caption{RMSE e tempo (mediana e mínimo de 25 repetições). O RMSE é idêntico entre os dois caminhos de discretização, como esperado de implementações equivalentes.}
+\label{tab:resultados}
+\resizebox{0.86\linewidth}{!}{%
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Caso} & \textbf{Método} & \textbf{RMSE} & \textbf{mediana (s)} & \textbf{mín (s)} \\
+\midrule
+Calor 1D
+  & PDESolver/BDF2 (nó)   & $1{,}3475\times10^{-4}$ & $0{,}0366$ & $0{,}0358$ \\
+  & PDESolver/BDF2 (vet)  & $1{,}3475\times10^{-4}$ & $\mathbf{0{,}0071}$ & $0{,}0067$ \\
+  & PDESolver/CN (vet)    & $1{,}3155\times10^{-4}$ & $0{,}0077$ & $0{,}0069$ \\
+  & PDESolver/RKF (vet)   & $1{,}3207\times10^{-4}$ & $0{,}0171$ & $0{,}0164$ \\
+  & FiPy/Euler            & $7{,}7384\times10^{-4}$ & $0{,}5801$ & $0{,}5582$ \\
+  & FiPy/CN               & $1{,}3319\times10^{-4}$ & $0{,}7992$ & $0{,}7769$ \\
+  & py-pde/LSODA          & $\mathbf{1{,}1121\times10^{-4}}$ & $0{,}4582$ & $0{,}4475$ \\
+\midrule
+Calor 2D
+  & PDESolver/BDF2 (nó)   & $2{,}6940\times10^{-4}$ & $1{,}2578$ & $1{,}2224$ \\
+  & PDESolver/CN (vet)    & $2{,}6774\times10^{-4}$ & $0{,}0418$ & $0{,}0395$ \\
+  & PDESolver/RKF (vet)   & $2{,}6878\times10^{-4}$ & $\mathbf{0{,}0185}$ & $0{,}0179$ \\
+  & FiPy/Euler            & $9{,}5760\times10^{-4}$ & $0{,}7981$ & $0{,}7839$ \\
+  & FiPy/CN               & $2{,}8113\times10^{-4}$ & $1{,}0194$ & $0{,}9964$ \\
+  & py-pde/LSODA          & $\mathbf{2{,}0087\times10^{-4}}$ & $0{,}9666$ & $0{,}9285$ \\
+\midrule
+Advecção-Difusão
+  & PDESolver/BDF2 (vet)  & $9{,}9517\times10^{-4}$ & $\mathbf{0{,}0073}$ & $0{,}0071$ \\
+  & PDESolver/CN (vet)    & $\mathbf{9{,}9056\times10^{-4}}$ & $0{,}0080$ & $0{,}0077$ \\
+  & PDESolver/RKF (vet)   & $9{,}9377\times10^{-4}$ & $0{,}0130$ & $0{,}0127$ \\
+  & FiPy/Euler            & $3{,}3139\times10^{-3}$ & $0{,}6557$ & $0{,}6452$ \\
+  & FiPy/CN               & $3{,}0153\times10^{-3}$ & $0{,}8742$ & $0{,}8616$ \\
+  & py-pde/LSODA          & $1{,}7373\times10^{-3}$ & $1{,}6048$ & $1{,}5841$ \\
+\midrule
+Burgers Viscosa
+  & PDESolver/BDF2 (vet)  & $1{,}3598\times10^{-3}$ & $0{,}0897$ & $0{,}0865$ \\
+  & PDESolver/CN (vet)    & $1{,}3522\times10^{-3}$ & $0{,}0926$ & $0{,}0902$ \\
+  & PDESolver/RKF (vet)   & $1{,}3516\times10^{-3}$ & $\mathbf{0{,}0121}$ & $0{,}0116$ \\
+  & FiPy/Euler            & $1{,}4284\times10^{-3}$ & $0{,}5750$ & $0{,}5613$ \\
+  & FiPy/CN               & $\mathbf{1{,}0098\times10^{-3}}$ & $0{,}7922$ & $0{,}7809$ \\
+  & py-pde/LSODA          & $1{,}3501\times10^{-3}$ & $1{,}6657$ & $1{,}6355$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+% PENDENTE: reexecutar os casos "Equacao da Onda 1D" e "Presa-Predador" com o
+% esquema FiPy/CN corrigido e incorporar as linhas correspondentes. Os scripts
+% originais usam N_RUNS=10 e N_RUNS=2 respectivamente, e o predador usa
+% NT=1000 (dt=1e-3), divergente do dt=5e-3 declarado na configuracao.
+
+Com esquemas temporais de mesma ordem, a acurácia é \textbf{equivalente} entre as três bibliotecas: o py-pde obtém o menor RMSE nos dois casos de difusão pura, o PDESolver em advecção-difusão (três vezes melhor que o FiPy/CN, diferença atribuível ao tratamento convectivo em volumes finitos) e o FiPy/CN em Burgers. O tempo de execução, por outro lado, difere sistematicamente: o melhor método do PDESolver é 113, 55, 120 e 65 vezes mais rápido que o FiPy/CN nos quatro casos, respectivamente.
+
+\subsection{Escalabilidade}
+
+O caminho por nó rederiva o mesmo estêncil em cada ponto, de modo que seu custo cresce com a malha embora a EDP permaneça a mesma. A Tabela~\ref{tab:escala} mostra o tempo total (montagem mais vinte passos) para o calor 2D.
+
+\begin{table}[!htb]
+\centering
+\caption{Custo total de montagem e vinte passos, calor 2D.}
+\label{tab:escala}
+\begin{tabular}{rrrrr}
+\toprule
+$N$ & incógnitas & por nó (s) & vetorizado (s) & razão \\
+\midrule
+21  & 441      & $1{,}344$  & $0{,}036$ & $37\times$ \\
+41  & 1\,681   & $6{,}937$  & $0{,}065$ & $107\times$ \\
+81  & 6\,561   & $47{,}602$ & $0{,}132$ & $360\times$ \\
+161 & 25\,921  & inviável   & $0{,}355$ & --- \\
+321 & 103\,041 & inviável   & $1{,}311$ & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O caminho vetorizado fornece ainda o padrão de esparsidade e uma coloração estrutural do Jacobiano de forma analítica, de modo que o número de avaliações do lado direito necessário para montar a matriz do operador \textbf{não depende da malha}: nove, com 441 ou com 65\,536 incógnitas, em vez de uma avaliação por coluna.
+
+\subsection{Execução em GPU}
+
+A Tabela~\ref{tab:gpu} apresenta a avaliação do lado direito em CPU e em GPU (NVIDIA RTX~4070~Ti) para o calor 2D.
+
+\begin{table}[!htb]
+\centering
+\caption{Avaliação do lado direito, CPU e GPU. Os resultados são idênticos bit a bit.}
+\label{tab:gpu}
+\begin{tabular}{rrrrr}
+\toprule
+malha & incógnitas & CPU & GPU & razão \\
+\midrule
+$128^2$  & 16\,384      & $0{,}09$~ms & $0{,}46$~ms & $0{,}2\times$ \\
+$256^2$  & 65\,536      & $0{,}36$~ms & $0{,}46$~ms & $0{,}8\times$ \\
+$512^2$  & 262\,144     & $6{,}1$~ms  & $0{,}45$~ms & $13{,}5\times$ \\
+$1024^2$ & 1\,048\,576  & $25{,}4$~ms & $1{,}0$--$1{,}5$~ms & $17$--$24\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Abaixo de aproximadamente 65\,000 incógnitas a GPU é mais lenta, pois seu tempo é dominado por uma sobrecarga fixa de lançamento de núcleo da ordem de $0{,}45$~ms; a troca de dispositivo ocorre automaticamente apenas acima desse limiar. Uma solução completa do RKF adaptativo em malha $512^2$ leva $9{,}21$~s em CPU e $0{,}69$~s em GPU.
+
+\subsection{Interface entre Materiais}
+\label{sec:interface}
+
+Considere condução estacionária em meio bicamada, $k_1 = 1{,}0$ em $x < 0{,}4$ e $k_2 = 0{,}25$ em $x > 0{,}4$, com $u(0)=1$ e $u(1)=0$. A continuidade de fluxo fornece a temperatura de interface analítica $u^\ast = 6/7 \approx 0{,}857142857$. A Tabela~\ref{tab:interface} compara as duas formulações.
+
+\begin{table}[!htb]
+\centering
+\caption{Interface entre materiais, $N=81$. A forma expandida executa sem erro e viola a conservação de fluxo.}
+\label{tab:interface}
+\resizebox{0.82\linewidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+Formulação & $u^\ast$ numérico & erro & salto de fluxo \\
+\midrule
+$k(x)\,\partial_{xx}u$, $k$ descontínuo (vetorizado) & $0{,}600000$ & $2{,}6\times10^{-1}$ & $7{,}5\times10^{-1}$ \\
+Forma conservativa, Eq.~(\ref{eq:conservativa}) (por nó) & $0{,}857142857$ & $5{,}9\times10^{-12}$ & $3{,}4\times10^{-13}$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+A primeira formulação produz erro de 30\% e fluxo descontínuo --- energia criada na interface --- sem emitir qualquer diagnóstico. A segunda reproduz a solução analítica até o resíduo do transiente. O exemplo delimita com precisão o que separa os dois caminhos de discretização: não é a variação espacial do coeficiente, que ambos expressam, mas a necessidade de \emph{pesos distintos por vizinho em um mesmo nó}.
+
+\subsection{Matriz de Capacidades}
+\label{sec:capacidades}
+
+A Tabela~\ref{tab:capacidades} classifica cada recurso conforme seja expressável na notação declarativa da própria biblioteca, alcançável apenas por código numérico manual, ou ausente. Cada entrada foi verificada experimentalmente; quando duas bibliotecas expressam o mesmo recurso, verificou-se que \emph{concordam}.
+
+\begin{table}[!htb]
+\centering
+\caption{Capacidades verificadas experimentalmente.}
+\label{tab:capacidades}
+\resizebox{0.92\linewidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+\textbf{Recurso} & \textbf{PDESolver} & \textbf{FiPy} & \textbf{py-pde} \\
+\midrule
+Derivada mista $\partial_{xy}u$          & declarativo & ausente & declarativo \\
+Produto não-linear de derivadas          & declarativo & ausente & declarativo \\
+Malha não uniforme                       & declarativo & nativo  & ausente \\
+Contorno periódico                       & declarativo & nativo  & declarativo \\
+Equação própria por nó / região          & declarativo & manual  & ausente \\
+Análise da discretização                 & declarativo & ausente & ausente \\
+Aceleração por GPU                       & sim (RKF)   & não     & não \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Nenhum recurso isolado é exclusivo do PDESolver, mas nenhuma das outras bibliotecas reúne o conjunto: o FiPy não expressa derivadas mistas nem produtos não-lineares de derivadas; o py-pde não admite malhas não uniformes nem equações por região. Na derivada mista, PDESolver e py-pde produzem RMSE de $1{,}40\times10^{-3}$ e $1{,}06\times10^{-3}$; no produto não-linear, $0{,}47693$ e $0{,}47579$, concordando em $0{,}24\%$.
+
+\subsection{Verificação}
+
+A convergência espacial de segunda ordem foi confirmada nos casos com solução analítica, incluindo o estêncil de derivada mista e os pesos de coeficiente variável em malhas estiradas. Os termos líderes de truncamento derivados automaticamente reproduzem os valores clássicos --- $h^2u'''/6$ para a primeira derivada centrada, $\mp h u''/2$ para as unilaterais e $h^2u''''/12$ para a segunda derivada centrada --- e o polinômio de estabilidade construído a partir do tableau reproduz a exponencial até quinta ordem. Os dois caminhos independentes para o limite de estabilidade, símbolo de Fourier e espectro do operador montado, concordam dentro de $0{,}1\%$ no calor 2D. Em malha estirada, verificou-se numericamente o cancelamento previsto pela Equação~(\ref{eq:momentos}).
+
+\subsection{Separação IMEX Automática}
+\label{sec:imex}
+
+A análise de rigidez da Seção~\ref{sec:analise} não é apenas relatada: ela
+seleciona o integrador. O método \texttt{'imex'} separa cada termo aditivo da
+equação pela ordem da derivada espacial que carrega e pela linearidade nas
+incógnitas. Termos lineares de segunda ordem, cujo símbolo escala com $h^{-2}$,
+são os que forçam a redução do passo e vão para o lado implícito; advecção
+($h^{-1}$), reação e não-linearidades permanecem explícitos. Termos não-lineares
+nunca migram para o lado implícito, o que mantém o operador implícito constante
+e a fatoração reaproveitável. Um BDF2 semi-implícito (SBDF2) avança o sistema.
+
+Quando a parte implícita é um laplaciano de coeficiente constante em malha 2D
+uniforme com contornos de Dirichlet, a base de senos discretos a diagonaliza
+exatamente, e o estágio é resolvido por transformada discreta de senos em
+$O(N \log N)$, em vez de por substituição triangular esparsa. A estrutura é
+detectada automaticamente, com retorno à fatoração LU esparsa quando a malha é
+estirada, o coeficiente varia ou há termo misto. A Tabela~\ref{tab:dst} compara
+os dois estágios; a solução por DST reproduz a da LU esparsa até
+$\approx10^{-13}$.
+
+\begin{table}[!htb]
+\centering
+\caption{Custo de uma resolução do estágio implícito, calor 2D.}
+\label{tab:dst}
+\begin{tabular}{rrrrr}
+\toprule
+malha & incógnitas & LU esparsa & DST & razão \\
+\midrule
+$41^2$  & 1\,681   & $0{,}07$~ms  & $0{,}04$~ms & $1{,}7\times$ \\
+$81^2$  & 6\,561   & $0{,}34$~ms  & $0{,}09$~ms & $3{,}5\times$ \\
+$161^2$ & 25\,921  & $2{,}14$~ms  & $0{,}31$~ms & $6{,}8\times$ \\
+$321^2$ & 103\,041 & $12{,}78$~ms & $1{,}74$~ms & $7{,}3\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Em um problema de advecção-difusão-reação em malha $321\times321$, o integrador
+explícito aceita 886 passos --- limitado por estabilidade, contra os 891 passos
+mínimos previstos pela análise da Seção~\ref{sec:analise} --- enquanto o IMEX
+usa 200. Com o estágio por DST, o IMEX conclui em $2{,}75$~s contra $12{,}40$~s
+do explícito, razão de $4{,}5\times$, que cresce com a malha ($2{,}3\times$ em
+$161^2$). O erro do integrador explícito é menor, mas apenas porque a
+estabilidade o obriga a passos muito mais finos do que a tolerância exigiria:
+ele não pode trocar essa acurácia por velocidade. Sem o estágio por DST o ganho
+era de apenas $1{,}3\times$, pois a resolução esparsa dominava o custo por passo.
+
+\section{LIMITAÇÕES}
+
+A biblioteca restringe-se a domínios retangulares em uma e duas dimensões; geometrias não estruturadas e domínios tridimensionais estão fora do escopo. A discretização espacial é de segunda ordem. O refinamento não uniforme está disponível no espaço, mas os integradores operam com passo temporal fixo, exceto o Runge-Kutta-Fehlberg. O estágio implícito por transformada de senos exige laplaciano de coeficiente constante em malha 2D uniforme com contornos de Dirichlet; fora dessas condições o método recai na fatoração esparsa, cujo custo por passo pode anular o ganho da separação IMEX. Eixos periódicos admitem espaçamento uniforme ou nós explícitos. Equações por região exigem o caminho por nó, que não escala para malhas grandes --- combinação que hoje impede tratar meios heterogêneos em malhas finas. Os métodos implícitos executam apenas em CPU.
+
+A camada de análise herda as hipóteses da teoria que aplica: o limite de estabilidade é resultado linear, e o relatório indica explicitamente quando termos não-lineares foram desconsiderados. Trata-se ainda de um limite de pior caso sobre todos os modos de Fourier, de modo que uma simulação iniciada com dado suave pode legitimamente excedê-lo enquanto os modos mais altos não carregam energia.
+
+\section{CONCLUSÃO}
+
+Apresentou-se o PDESolver, biblioteca Python para sistemas de EDPs evolutivas com interface simbólica. A contribuição central é o emprego da representação simbólica para além da montagem do sistema: duas implementações independentes da mesma discretização, que se verificam mutuamente até a precisão de máquina, e uma camada que deriva automaticamente erro de truncamento, difusão numérica e limite de estabilidade a partir da equação escrita pelo usuário.
+
+Os experimentos indicam acurácia equivalente à de FiPy e py-pde quando comparados esquemas temporais de mesma ordem, com tempo de execução uma a duas ordens de grandeza menor. A implementação vetorizada reduz o custo de montagem em até $360\times$ e torna tratáveis malhas de $321\times321$, além de habilitar execução em GPU com resultados idênticos aos da CPU.
+
+Como perspectivas, destacam-se o operador conservativo em forma divergente e regiões mascaradas no caminho vetorizado --- que juntos colocariam meios heterogêneos no caminho de alto desempenho ---, o fechamento do laço da análise por meio de separação IMEX automática entre termos rígidos e não rígidos, e a extensão a domínios tridimensionais.
+
+Código-fonte, suíte de benchmarks, contêiner e caderno reprodutível estão disponíveis em \url{https://github.com/maiocacedo} e via \texttt{pip install pdesolver} (licença MIT).
+
+\section*{Contribuições dos Autores}
+Seguindo a taxonomia CRediT: Caio Macedo Lima da Cruz: Conceptualization, Software, Methodology, Validation, Visualization, Writing -- original draft. Antonio Augusto Ignacio: Formal analysis, Investigation, Writing -- original draft, Writing -- review \& editing. Evandro Alves Nakajima: Conceptualization, Methodology, Validation, Formal analysis, Writing -- review \& editing, Supervision, Project administration.
+
+\bibliographystyle{abntex2-alf}
+\bibliography{referencias}
+
+\end{document}
