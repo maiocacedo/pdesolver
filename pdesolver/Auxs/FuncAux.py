@@ -3,6 +3,7 @@ import re
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 
+
 def build_func_map(xp):
     return {
         "sin": xp.sin,

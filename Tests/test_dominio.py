@@ -1,7 +1,9 @@
-import numpy as np
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import pytest
+
 from pdesolver import PDE, PDES
 
 TF = 0.1

@@ -12,7 +12,6 @@ from ..Auxs.FuncAux import build_func_map as _build_func_map
 from ..Auxs.FuncAux import symbol_references
 from ..Disc.stencil import group_constraints
 
-
 _dll_dirs = []
 
 

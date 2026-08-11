@@ -1,13 +1,18 @@
 import math
 
-import numpy as np
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import pytest
 import sympy as sp
+
 from pdesolver import PDE, PDES
 from pdesolver.Analysis.stability import (
-    max_stable_dt, real_axis_limit, rkf45_polynomial, symbol_eigenvalues,
+    max_stable_dt,
+    real_axis_limit,
+    rkf45_polynomial,
+    symbol_eigenvalues,
 )
 from pdesolver.Analysis.truncation import H, error_order, leading_term
 

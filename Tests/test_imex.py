@@ -1,10 +1,12 @@
 import math
 
-import numpy as np
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import pytest
 import sympy as sp
+
 from pdesolver import PDE, PDES
 
 NU = 0.02
@@ -146,6 +148,7 @@ def test_imex_exige_backend_stencil():
 def test_dst_concorda_com_lu():
     import scipy.sparse as sps
     from scipy.sparse.linalg import splu
+
     from pdesolver.Solvers import fastpoisson
     from pdesolver.Solvers.solver_base import ColoredJacobian
 

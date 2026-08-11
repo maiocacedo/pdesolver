@@ -1,11 +1,13 @@
 import re
 import time
 import warnings
+
 import numpy as np
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
 import scipy.sparse as sp_sparse
+import sympy as sp
 from scipy.sparse.linalg import spsolve
+from sympy.parsing.sympy_parser import parse_expr
+
 
 def compile_equations(flat_list, d_vars, verbose=False, use_cse=True):
     t0 = time.time()

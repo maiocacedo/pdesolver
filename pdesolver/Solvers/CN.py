@@ -1,15 +1,23 @@
 import time
+
 import numpy as np
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
 import scipy.sparse as sp_sparse
-from scipy.sparse.linalg import spsolve, splu
+import sympy as sp
+from scipy.sparse.linalg import splu, spsolve
+from sympy.parsing.sympy_parser import parse_expr
 
 from ..Disc.stencil import group_constraints
 from .solver_base import (
-    ColoredJacobian, compile_equations, extract_linear_structure,
-    detect_linearity, eval_F, impose_dirichlet, picard_step, newton_step,
-    make_history, save_to_history,
+    ColoredJacobian,
+    compile_equations,
+    detect_linearity,
+    eval_F,
+    extract_linear_structure,
+    impose_dirichlet,
+    make_history,
+    newton_step,
+    picard_step,
+    save_to_history,
 )
 
 

@@ -2,11 +2,12 @@
 benchmark_calor2d.py
 Equacao do Calor 2D:  dF/dt = a*(d2F/dx2 + d2F/dy2),  Dirichlet 0.
 """
-import numpy as np
-import time
-import warnings
 import platform
 import sys
+import time
+import warnings
+
+import numpy as np
 
 warnings.filterwarnings("ignore")
 
@@ -45,12 +46,15 @@ def fmt(label, rms, st):
 
 
 import os as _os
+
 sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-from pdesolver import PDE as PDEOBJ, PDES
 import fipy
-from fipy import CellVariable, Grid2D, TransientTerm, DiffusionTerm
-from fipy.tools import numerix
 import pde as pypde
+from fipy import CellVariable, DiffusionTerm, Grid2D, TransientTerm
+from fipy.tools import numerix
+
+from pdesolver import PDE as PDEOBJ
+from pdesolver import PDES
 
 
 def analitica2d(X, Y, t):

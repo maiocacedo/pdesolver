@@ -1,6 +1,8 @@
 import json
+
 import numpy as np
 import sympy as sp
+
 
 class PDESEncoder(json.JSONEncoder):
     def default(self, obj):
