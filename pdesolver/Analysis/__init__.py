@@ -1,10 +1,10 @@
 from .report import analyze, report_text
 from .stability import (
-    spectral_sample,
     cell_peclet,
     max_stable_dt,
-    rkf45_polynomial,
     real_axis_limit,
+    rkf45_polynomial,
+    spectral_sample,
     stability_limit,
     symbol_eigenvalues,
 )

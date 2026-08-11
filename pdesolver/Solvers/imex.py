@@ -7,7 +7,10 @@ from scipy.sparse.linalg import splu
 from ..Disc.stencil import group_constraints
 from . import fastpoisson
 from .solver_base import (
-    ColoredJacobian, impose_dirichlet, make_history, save_to_history,
+    ColoredJacobian,
+    impose_dirichlet,
+    make_history,
+    save_to_history,
 )
 
 
