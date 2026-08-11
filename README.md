@@ -15,6 +15,13 @@
 
 **Target audience:** Anyone working with 1D or 2D time-dependent PDEs who wants a Pythonic, accessible tool that "just works" from equation to visualization in a few lines of code.
 
+**At a glance:** Dirichlet, Neumann, Robin and periodic boundaries; uniform and
+[stretched meshes](#non-uniform-meshes); first, second and
+[mixed second derivatives](#equation-notation); coupled systems; implicit
+(BDF2, Crank–Nicolson) and explicit adaptive (RKF45) time integration; and a
+[vectorized backend](#discretization-backends) whose symbolic cost is
+independent of the mesh size, for large 2D grids and GPU execution.
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -24,6 +31,9 @@
 - [The `PDES` Class (System)](#the-pdes-class-system)
 - [Boundary Conditions](#boundary-conditions)
 - [Spatial Discretization](#spatial-discretization)
+- [Non-Uniform Meshes](#non-uniform-meshes)
+- [Discretization Analysis](#discretization-analysis)
+- [Discretization Backends](#discretization-backends)
 - [Solvers (Time Integration)](#solvers-time-integration)
 - [Visualization](#visualization)
 - [Import & Export (JSON)](#import--export-json)
@@ -92,6 +102,7 @@ Equations are written as strings using a human-readable notation. The library pa
 | `d2u/dx2` | ∂²u/∂x² — second partial derivative | `d2u/dx2` |
 | `du/dy` | ∂u/∂y — first derivative in y | `du/dy` |
 | `d2u/dy2` | ∂²u/∂y² — second derivative in y | `d2u/dy2` |
+| `d2u/dxdy` | ∂²u/∂x∂y — mixed second derivative (2D only) | `d2u/dxdy` |
 | `du/dt` | ∂u/∂t — time derivative (always on the **left** side of `=`) | `du/dt = ...` |
 | `u` | the unknown function itself | `- k*u` |
 
@@ -109,7 +120,11 @@ du/dt = d2u/dx2 + d2u/dy2                               # Heat equation 2D
 du/dt = -u*du/dx + 0.01*d2u/dx2                         # Burgers equation 1D
 du/dt = -0.5*du/dx + 0.001*d2u/dx2 - 0.1*u             # Advection-diffusion-reaction
 dU/dt = 1.0*d2U/dx2 + 1.0*d2U/dy2 + U - U**3/3 - V    # FitzHugh-Nagumo (U component)
+du/dt = d2u/dx2 + 1.0*d2u/dxdy + d2u/dy2               # Anisotropic diffusion (mixed term)
 ```
+
+> **Note:** `d2u/dxdy` and `d2u/dydx` are equivalent and produce the same
+> stencil. The mixed term requires two spatial variables.
 
 ---
 
@@ -183,6 +198,8 @@ sistema = PDES(pdes=[pde], disc_n=[30, 30])           # 2D with 30×30 grid
 |:----------|:-----|:------------|
 | `pdes` | `list[PDE]` | List of PDE objects. For coupled systems, pass multiple PDEs. |
 | `disc_n` | `list[int]` | Number of grid points per spatial dimension. `[50]` for 1D, `[30, 30]` for 2D. |
+| `mesh` | `str \| dict \| list` | Node distribution. `'uniform'` (default), `'chebyshev'`, `'tanh'`, `'tanh_left'`, `'tanh_right'`, or explicit nodes. See [Non-Uniform Meshes](#non-uniform-meshes). |
+| `backend` | `str` | `'symbolic'` (default) or `'stencil'`. See [Discretization Backends](#discretization-backends). |
 
 ### Key methods
 
@@ -198,7 +215,7 @@ sistema = PDES(pdes=[pde], disc_n=[30, 30])           # 2D with 30×30 grid
 
 ## Boundary Conditions
 
-The library supports three types of boundary conditions, applied independently to each side of the domain.
+The library supports four types of boundary conditions. Dirichlet, Neumann, and Robin are applied independently to each side of the domain; Periodic applies to a whole axis and must be declared on both of its sides.
 
 ### Dirichlet — prescribed value
 
@@ -244,6 +261,46 @@ Combines Dirichlet and Neumann conditions. Defined by coefficients α and β suc
 
 Robin boundary conditions are configured via the discretization module with `alpha` and `beta` parameters.
 
+### Periodic — wrap-around domain
+
+The solution and its derivatives are continuous across the domain edges, so
+`u(a, t) = u(b, t)`. Useful for advection on a ring, spectral-like test cases,
+and any problem with no physical boundary.
+
+```python
+# 1D advection on a periodic ring
+pde = PDE(
+    eq="du/dt = -du/dx",
+    func="u",
+    sp_var=["x"], ivar=["t"],
+    ivar_boundary=[(0, 1)],
+    expr_ic="sin(2*pi*x)",
+    west_bd="Periodic", east_bd="Periodic",
+)
+```
+
+```python
+# 2D torus — both axes periodic
+pde = PDE(
+    eq="du/dt = 0.05*d2u/dx2 + 0.05*d2u/dy2",
+    func="u",
+    sp_var=["x", "y"], ivar=["t"],
+    ivar_boundary=[(0, 1), (0, 1)],
+    expr_ic="sin(2*pi*x)*sin(2*pi*y)",
+    west_bd="Periodic",  east_bd="Periodic",
+    north_bd="Periodic", south_bd="Periodic",
+)
+```
+
+> **Periodicity is a property of an axis, not of a side.** Both sides of an axis
+> must be declared together — `west_bd="Periodic"` with `east_bd="Dirichlet"`
+> raises `ValueError`. Declaring one axis periodic and the other not is fine
+> (a cylinder).
+
+> **Node count:** a periodic axis places `disc_n` nodes over `[a, b)` — the
+> endpoint is *not* duplicated, since `u(a) = u(b)` would make the system
+> singular. A periodic axis therefore produces no Dirichlet constraints.
+
 ### Mixed boundaries
 
 You can mix boundary types freely on different sides:
@@ -279,6 +336,305 @@ sistema.discretize(method='central')   # default
 | `'backward'` | Backward differences | (u_i − u_{i−1}) / h | (u_{i+1} − 2u_i + u_{i−1}) / h² | Advection-dominated problems |
 
 > **Note:** The second derivative stencil is the same for all three methods. Only the first derivative approximation changes.
+
+The stencils above are shown for a uniform mesh. On a stretched mesh the same
+schemes are built from variable-coefficient weights that reduce exactly to
+these formulas when the spacing is constant.
+
+---
+
+## Non-Uniform Meshes
+
+Grid points do not have to be equally spaced. Clustering nodes where the
+solution varies fastest — boundary layers, shocks, sharp fronts — resolves the
+feature with far fewer points than a uniform grid of the same size.
+
+```python
+sistema = PDES(pdes=[pde], disc_n=[41], mesh='chebyshev')
+sistema = PDES(pdes=[pde], disc_n=[41], mesh={'type': 'tanh_right', 'beta': 5.0})
+sistema = PDES(pdes=[pde], disc_n=[30, 30], mesh=['tanh', 'uniform'])  # per axis
+```
+
+### Available distributions
+
+| `type` | Clustering | Parameter | Notes |
+|:-------|:-----------|:----------|:------|
+| `'uniform'` | none | — | Default; equally spaced. |
+| `'chebyshev'` | both ends | — | Gauss–Lobatto nodes. |
+| `'tanh'` | both ends | `beta` | Symmetric stretching; larger `beta` = stronger clustering. |
+| `'tanh_left'` | near `a` | `beta` | One-sided, towards the start of the domain. |
+| `'tanh_right'` | near `b` | `beta` | One-sided, towards the end of the domain. |
+
+Explicit node arrays are also accepted:
+
+```python
+import numpy as np
+sistema = PDES(pdes=[pde], disc_n=[25], mesh={'nodes': np.linspace(0, 1, 25)**2})
+```
+
+### Why it helps
+
+For an advection–diffusion boundary layer of width ε = 0.005 solved on 41 points,
+clustering towards the outflow boundary cuts the mean absolute error by ~4×
+compared to a uniform grid with the same number of points:
+
+| Mesh | MAE |
+|:-----|----:|
+| `'uniform'` | 1.85 × 10⁻² |
+| `{'type': 'tanh_right', 'beta': 5.0}` | 4.23 × 10⁻³ |
+
+The variable-coefficient stencils remain second-order accurate on smoothly
+stretched meshes.
+
+> **Note:** a periodic axis supports `'uniform'` spacing or explicit nodes.
+
+---
+
+## Discretization Analysis
+
+Because the equation is kept in symbolic form, the library can derive what your
+discretization is *actually* doing — before you run it, and for the equation
+you actually wrote rather than a tabulated special case.
+
+```python
+sistema = PDES(pdes=[pde], disc_n=[51])
+sistema.discretize(method='backward')
+sistema.analyze()
+```
+
+```
+  [análise] Discretização
+    du/dx      esquema 'backward' — erro O(h^1), termo líder -h/2*u^(2)
+      na malha atual: |coef| máximo = 1.000e-02
+    d2u/dx2    esquema 'backward' — erro O(h^2), termo líder h**2/12*u^(4)
+      na malha atual: |coef| máximo = 3.333e-05
+  [análise] Difusão numérica introduzida pelo esquema
+    de du/dx: adiciona 1.000e-02 vs física 1.000e-02 (100.0%)
+  [análise] Estabilidade
+    RKF: dt_max = 1.839e-02 (símbolo de Fourier, |z| = 3.6777)
+    espectro do operador montado: dt_max = 1.966e-02
+```
+
+That report says something a convergence test would not: on this mesh the
+upwind scheme contributes as much diffusion as the physical viscosity, so the
+simulation is running at roughly twice the intended ν.
+
+### Methods
+
+| Method | Returns |
+|:-------|:--------|
+| `analyze(method='RKF')` | Full report — truncation, numerical diffusion, stability, Péclet. Prints unless `verbose=False`. |
+| `truncation_error()` | Leading truncation term of every discretized derivative, symbolic and as realised on the current mesh. |
+| `modified_equation()` | The terms the scheme adds to the PDE that are absent from the continuous equation. |
+| `stability_limit(method='RKF')` | Largest stable `dt`. Returns `inf` for the A-stable implicit methods. |
+
+### What it detects
+
+- **Truncation error and formal order**, derived from the stencil moments rather than tabulated — so it stays correct on stretched meshes.
+- **Numerical diffusion, with its sign.** A downwind scheme reports `SUBTRAI`, together with a warning that an anti-diffusive scheme tends to be unstable.
+- **Growing modes.** If the discrete spatial operator has an eigenvalue with positive real part, no time step makes the scheme stable, and the report says so instead of quoting a `dt_max`.
+- **Cell Péclet number**, warning when central differencing will oscillate.
+
+### Closing the loop: automatic IMEX splitting
+
+The stiffness analysis is not only reported — it drives an integrator.
+`solve(method='imex')` classifies each additive term by the order of the spatial
+derivative it carries and by whether it is linear in the unknowns. Linear
+second-order terms scale as `h⁻²` and are what force the step size down, so they
+go to the implicit side; first-order and reaction terms stay explicit. A
+semi-implicit BDF2 then advances the system, factorizing the implicit operator
+once.
+
+```python
+sistema = PDES(pdes=[pde], disc_n=[321, 321], backend='stencil')
+sistema.discretize(method='central')
+sistema.solve(method='imex', tf=0.2, nt=200, verbose=True)
+```
+
+```
+[IMEX] Separação simbólica: 2/5 termos implícitos
+  implícito  |λ|=512.00   0.02*XX0_xx
+  implícito  |λ|=512.00   0.02*XX0_yy
+  explícito  |λ|= 79.81   -1.0*XX0_x
+  explícito  |λ|=  1.00   XX0
+  explícito  |λ|=  0.00   -XX0**3  [não linear]
+[IMEX] |λ| total=1024, explícito=79.81 → passo ~12.8x maior
+```
+
+Nonlinear terms are never moved to the implicit side, which keeps the implicit
+operator constant and the factorization reusable.
+
+### The implicit stage: fast Poisson solver
+
+When the implicit part is a constant-coefficient Laplacian on a uniform 2D grid
+with Dirichlet boundaries, the discrete sine basis diagonalizes it exactly, and
+the stage is solved by a **discrete sine transform** in `O(N log N)` instead of
+a sparse triangular solve. The solver detects this structure automatically and
+falls back to a sparse LU factorization otherwise — a stretched mesh, a variable
+coefficient or a mixed term all disqualify it, and each case is covered by a
+test.
+
+The DST result reproduces the sparse LU solve to machine precision
+(≈10⁻¹³), and is faster from the smallest 2D meshes upward:
+
+| Grid | Unknowns | sparse LU | DST | Speedup |
+|:-----|---------:|----------:|----:|--------:|
+| 41²  | 1 681    | 0.07 ms | 0.04 ms | 1.7× |
+| 81²  | 6 561    | 0.34 ms | 0.09 ms | 3.5× |
+| 161² | 25 921   | 2.14 ms | 0.31 ms | 6.8× |
+| 321² | 103 041  | 12.78 ms | 1.74 ms | **7.3×** |
+
+It also removes the factorization itself, which costs 0.32 s at 321².
+
+> **Against the implicit solvers.** This is where the gain is largest. On a
+> non-linear problem (`+ U − U³`) with Dirichlet boundaries, at the same step
+> count and comparable accuracy:
+>
+> | Grid | BDF2 | CN | **IMEX** |
+> |:-----|-----:|---:|---------:|
+> | 128² | 25.5 s | 22.7 s | **0.88 s** |
+> | 256² | 67.3 s | 73.6 s | **0.87 s** |
+>
+> 26× to 85× faster, because BDF2 and CN enter Newton at every step — colored
+> Jacobian, assembly, sparse LU — while IMEX puts the non-linearity on the
+> explicit side and **removes Newton entirely**, leaving one DST per step. Note
+> that the IMEX cost barely moves from 128² to 256².
+>
+> **Against the explicit solver.** On a 321² advection–diffusion–reaction
+> problem the explicit RKF needs 886 steps — it is stability limited — against
+> 200 for IMEX, completing in 2.75 s against 12.40 s, a **4.5×** speedup
+> (2.3× at 161²). The advantage only appears over long enough horizons: on short
+> integrations where stability is not binding, RKF wins outright.
+>
+> These end-to-end timings were taken on a busy machine and varied by roughly a
+> factor of two between runs. The per-solve figures in the table above are
+> stable; re-measure the end-to-end ratio on an idle machine before quoting it.
+
+### Stability
+
+The time step limit is obtained two independent ways, which cross-check each
+other: from the Fourier symbol of the stencil combined with the stability
+polynomial of the Runge–Kutta tableau, and from the eigenvalues of the
+assembled operator matrix. On the 2D heat equation the two agree to within
+0.1%.
+
+> **Interpretation:** `dt_max` is a worst case over *all* Fourier modes. A run
+> starting from smooth data can exceed it while the highest modes carry no
+> energy, so treat it as a design bound rather than a hard prediction of the
+> step the adaptive solver will choose.
+
+### A note on stretched meshes
+
+The variable-coefficient weights are the exact three-point interpolatory
+weights, for which the `u''` moment cancels identically — so the first
+derivative stays second order on an *arbitrary* mesh, with leading term
+`h⁻h⁺/6·u'''`. The naive centred formula `(u₊ − u₋)/(h⁻ + h⁺)` does not have
+this property and drops to first order as soon as the spacing varies. You can
+confirm this on your own mesh with `truncation_error()`.
+
+---
+
+## Discretization Backends
+
+The same discretization is available through two independent implementations.
+They agree to machine precision, which is what the cross-backend test suite
+checks; the choice is purely about performance.
+
+```python
+sistema = PDES(pdes=[pde], disc_n=[30, 30])                       # 'symbolic' (default)
+sistema = PDES(pdes=[pde], disc_n=[512, 512], backend='stencil')  # large meshes
+```
+
+| Backend | How it works | Cost of setup |
+|:--------|:-------------|:--------------|
+| `'symbolic'` | Emits one equation string per grid node and compiles them all with SymPy. Every node is parsed individually. | Grows with the mesh. |
+| `'stencil'` | Parses each PDE **once** into an expression over derivative fields, then evaluates it over whole arrays with NumPy or CuPy. | Independent of the mesh. |
+
+Because the symbolic backend re-derives the same stencil at every node, its
+setup cost grows with the grid while the PDE itself does not change. Measured
+on the 2D heat equation (time to reach a state ready to integrate):
+
+| Grid | DOF | `'symbolic'` | `'stencil'` | Speedup |
+|:-----|----:|-------------:|------------:|--------:|
+| 15² | 225 | 0.61 s | 0.022 s | 28× |
+| 30² | 900 | 5.06 s | 0.006 s | 877× |
+| 60² | 3 600 | 25.6 s | 0.010 s | 2 646× |
+| 128² | 16 384 | not feasible | 0.014 s | — |
+| 256² | 65 536 | not feasible | 0.025 s | — |
+| 512² | 262 144 | not feasible | 0.034 s | — |
+
+The stencil backend also supplies an analytic sparsity pattern and colouring
+for the implicit solvers. The number of right-hand side evaluations needed to
+assemble the Jacobian becomes **independent of the mesh** — 9 colours whether
+the grid has 225 or 65 536 unknowns, instead of one evaluation per column.
+
+### GPU execution
+
+The stencil backend is array-module neutral, so the same operator runs under
+NumPy or CuPy. `solve(method='RKF', ...)` moves to the GPU automatically once
+the problem is large enough to amortize kernel launch overhead. Right-hand side
+evaluation on an RTX 4070 Ti:
+
+| Grid | DOF | CPU | GPU | Speedup |
+|:-----|----:|----:|----:|--------:|
+| 128² | 16 384 | 0.09 ms | 0.46 ms | 0.2× |
+| 256² | 65 536 | 0.36 ms | 0.46 ms | 0.8× |
+| 512² | 262 144 | 6.1 ms | 0.45 ms | **13.5×** |
+| 1024² | 1 048 576 | 25.4 ms | 1.0–1.5 ms | **17–24×** |
+
+Below roughly 65 000 unknowns the GPU is *slower* — its runtime is dominated by
+a fixed ~0.45 ms launch overhead — which is why the automatic switch only
+happens above that size. A full RKF solve on a 512² grid takes 9.2 s on CPU and
+0.69 s on GPU, producing results that agree bit for bit.
+
+> **Windows note:** when CUDA libraries come from the NVIDIA pip wheels, their
+> DLL directories are added to the search path automatically on import. No
+> manual `PATH` configuration is needed.
+
+All features — periodic boundaries, non-uniform meshes, mixed derivatives —
+are available on both backends. The one thing only `'symbolic'` can do is give
+individual nodes their own equation; see below.
+
+### Heterogeneous regions — symbolic backend only
+
+The symbolic backend represents the discretized system as **one independent
+algebraic equation per node**, so nodes can carry different equations. The
+vectorized backend cannot: assuming the same equation everywhere is precisely
+what makes vectorization possible.
+
+```python
+X, Y = sistema.grid.coords()
+bloco = (abs(X - 0.5) < 0.12) & (abs(Y - 0.5) < 0.12)
+
+sistema.discretize(method='central', regions=[
+    {'where': bloco, 'eq': 'dU/dt = 0'},          # frozen internal obstacle
+])
+```
+
+`'where'` takes a boolean mask over the grid or a callable of the grid
+coordinates; `'eq'` is an equation in the usual notation that replaces the
+system equation at those nodes. Boundary nodes keep their boundary condition —
+regions apply to interior nodes.
+
+This covers internal obstacles and masked domains, different physics per
+region, point sources, and material interfaces. For full control, `disc_results`
+is a plain list of expression strings that you may edit directly before
+solving — needed when a node requires a stencil that the notation cannot
+express, such as the conservative flux form across a conductivity jump:
+
+```python
+flat, d_vars = sistema.disc_results
+flat[i] = f'({k2}*XX0_{i+1}_0 - {k1+k2}*XX0_{i}_0 + {k1}*XX0_{i-1}_0)/{h**2}'
+sistema.disc_results = (flat, d_vars)
+```
+
+`examples/regioes_heterogeneas.py` runs three such cases and checks each
+against a closed-form result: a frozen obstacle, a two-material interface
+(interface temperature exact to 6 × 10⁻¹², flux continuous to 10⁻¹³), and a
+point source (peak and derivative jump exact).
+
+> Run `python benchmarks/bench_scaling.py` to reproduce these numbers on your
+> own machine.
 
 ---
 
