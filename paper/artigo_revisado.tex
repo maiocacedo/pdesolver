@@ -66,12 +66,12 @@ Coordenação do Curso de Bacharelado em Ciência da Computação\\
 }
 
 \selectlanguage{brazil}
-\resumo{Este trabalho apresenta o PDESolver, uma biblioteca de código aberto, escrita em Python, para a solução numérica de sistemas de equações diferenciais parciais evolutivas, de primeira ordem no tempo, em domínios retangulares uni e bidimensionais. A interface simbólica permite especificar equações, condições iniciais e condições de contorno em notação matemática direta. A discretização espacial emprega diferenças finitas com contornos de Dirichlet, Neumann, Robin e periódicos, malhas uniformes ou estiradas e derivadas mistas de segunda ordem. Duas implementações independentes da mesma discretização são disponibilizadas: uma que gera uma expressão algébrica por nó da malha, e outra vetorizada cujo custo simbólico independe do tamanho da malha, executável em CPU ou GPU. As duas concordam até a precisão de máquina, o que as torna verificação mútua. A representação simbólica é ainda empregada para derivar automaticamente o erro de truncamento, a difusão numérica introduzida pelo esquema e o limite de estabilidade do passo temporal. Em quatro problemas de referência, a biblioteca apresenta acurácia equivalente à de FiPy e py-pde com tempo de execução uma a duas ordens de grandeza menor, e a implementação vetorizada torna tratáveis malhas de $321\times321$, inviáveis na abordagem por nó.}
+\resumo{Este trabalho apresenta o PDESolver, uma biblioteca de código aberto, escrita em Python, para a solução numérica de sistemas de equações diferenciais parciais evolutivas, de primeira ordem no tempo, em domínios retangulares uni e bidimensionais. A interface simbólica permite especificar equações, condições iniciais e condições de contorno em notação matemática direta. A discretização espacial emprega diferenças finitas com contornos de Dirichlet, Neumann, Robin e periódicos, malhas uniformes ou estiradas e derivadas mistas de segunda ordem. Duas implementações independentes da mesma discretização são disponibilizadas: uma que gera uma expressão algébrica por nó da malha, e outra vetorizada cujo custo simbólico independe do tamanho da malha, executável em CPU ou GPU. As duas concordam até a precisão de máquina, o que as torna verificação mútua. A representação simbólica é ainda empregada para derivar automaticamente o erro de truncamento, a difusão numérica introduzida pelo esquema e o limite de estabilidade do passo temporal. Em seis problemas de referência, a biblioteca apresenta acurácia equivalente à de FiPy e py-pde com tempo de execução uma a duas ordens de grandeza menor, e a implementação vetorizada torna tratáveis malhas de $321\times321$, inviáveis na abordagem por nó.}
 
 \palchaves{Equações diferenciais parciais. Diferenças finitas. Interface simbólica. Análise de discretização. Aceleração por GPU.}
 
 \selectlanguage{english}
-\abstract{This work presents PDESolver, an open-source Python library for the numerical solution of systems of evolution partial differential equations, first order in time, on one- and two-dimensional rectangular domains. Its symbolic interface lets users specify equations, initial conditions and boundary conditions in direct mathematical notation. Spatial discretisation uses finite differences with Dirichlet, Neumann, Robin and periodic boundaries, uniform or stretched meshes, and second-order mixed derivatives. Two independent implementations of the same discretisation are provided: one that emits one algebraic expression per grid node, and a vectorised one whose symbolic cost is independent of mesh size and which runs on CPU or GPU. The two agree to machine precision, and therefore verify one another. The symbolic representation is further used to derive automatically the truncation error, the numerical diffusion the scheme introduces, and the stability limit on the time step. On four benchmark problems the library attains accuracy equivalent to FiPy and py-pde with execution time one to two orders of magnitude lower, and the vectorised path makes $321\times321$ meshes tractable, which the node-wise approach cannot reach.}
+\abstract{This work presents PDESolver, an open-source Python library for the numerical solution of systems of evolution partial differential equations, first order in time, on one- and two-dimensional rectangular domains. Its symbolic interface lets users specify equations, initial conditions and boundary conditions in direct mathematical notation. Spatial discretisation uses finite differences with Dirichlet, Neumann, Robin and periodic boundaries, uniform or stretched meshes, and second-order mixed derivatives. Two independent implementations of the same discretisation are provided: one that emits one algebraic expression per grid node, and a vectorised one whose symbolic cost is independent of mesh size and which runs on CPU or GPU. The two agree to machine precision, and therefore verify one another. The symbolic representation is further used to derive automatically the truncation error, the numerical diffusion the scheme introduces, and the stability limit on the time step. On six benchmark problems the library attains accuracy equivalent to FiPy and py-pde with execution time one to two orders of magnitude lower, and the vectorised path makes $321\times321$ meshes tractable, which the node-wise approach cannot reach.}
 
 \keywords{Partial differential equations. Finite differences. Symbolic interface. Discretisation analysis. GPU acceleration.}
 
@@ -241,7 +241,7 @@ A comparação justa de acurácia é contra \texttt{FiPy/CN}.
 
 \subsection{Acurácia e Desempenho}
 
-A Tabela~\ref{tab:resultados} apresenta os quatro problemas de referência com solução fechada ou de referência de alta ordem: calor 1D e 2D, advecção-difusão e Burgers viscosa. As colunas \texttt{/nó} e \texttt{/vet} identificam o caminho de discretização.
+A Tabela~\ref{tab:resultados} apresenta os seis problemas de referência com solução fechada ou de referência de alta ordem: calor 1D e 2D, advecção-difusão, Burgers viscosa, equação da onda 1D (reformulada como sistema de primeira ordem) e presa-predador (reação-difusão acoplada). As colunas \texttt{/nó} e \texttt{/vet} identificam o caminho de discretização.
 
 \begin{table}[!htb]
 \centering
@@ -285,14 +285,35 @@ Burgers Viscosa
   & FiPy/Euler            & $1{,}4284\times10^{-3}$ & $0{,}5750$ & $0{,}5613$ \\
   & FiPy/CN               & $\mathbf{1{,}0098\times10^{-3}}$ & $0{,}7922$ & $0{,}7809$ \\
   & py-pde/LSODA          & $1{,}3501\times10^{-3}$ & $1{,}6657$ & $1{,}6355$ \\
+\midrule
+Equação da Onda 1D$^{\dagger}$
+  & PDESolver/BDF2        & $1{,}3163\times10^{-4}$ & --- & --- \\
+  & PDESolver/CN          & $\mathbf{2{,}6550\times10^{-7}}$ & --- & --- \\
+  & PDESolver/RKF         & $4{,}8931\times10^{-7}$ & --- & --- \\
+  & FiPy/splitting        & $2{,}7602\times10^{-4}$ & --- & --- \\
+  & py-pde/LSODA          & $7{,}7100\times10^{-4}$ & --- & --- \\
+\midrule
+Presa-Predador$^{\ddagger}$
+  & PDESolver/BDF2        & $2{,}2260\times10^{-4}$ & --- & --- \\
+  & PDESolver/CN          & $2{,}2230\times10^{-4}$ & --- & --- \\
+  & PDESolver/RKF         & $2{,}2210\times10^{-4}$ & --- & --- \\
+  & FiPy/Picard-CN        & $1{,}4650\times10^{-3}$ & --- & --- \\
+  & py-pde/LSODA          & $\mathbf{2{,}1010\times10^{-4}}$ & --- & --- \\
 \bottomrule
 \end{tabular}}
+
+\vspace{2pt}
+{\footnotesize $^{\dagger}$ RMSE sobre $U$ contra a solução analítica $U=\sin(\pi x)\cos(\pi c t)$.
+$^{\ddagger}$ RMSE médio $(\mathrm{RMSE}_U+\mathrm{RMSE}_V)/2$ contra referência Radau em malha fina.
+Tempos de Onda 1D e Presa-Predador (---) pendentes de re-medição na máquina de referência (i7-14700K); os valores de RMSE foram verificados. O RMSE do py-pde na Onda 1D depende da versão da biblioteca (py-pde~0.56.1).}
 \end{table}
 
-% PENDENTE: reexecutar os casos "Equacao da Onda 1D" e "Presa-Predador" com o
-% esquema FiPy/CN corrigido e incorporar as linhas correspondentes. Os scripts
-% originais usam N_RUNS=10 e N_RUNS=2 respectivamente, e o predador usa
-% NT=1000 (dt=1e-3), divergente do dt=5e-3 declarado na configuracao.
+% RMSE de Onda 1D e Presa-Predador verificado (NT=200, dt=5e-3, config declarada):
+% PDESolver e FiPy reproduzem o artigo original; py-pde/LSODA reproduz no predador
+% (2,10e-4) e depende de versao na onda. Scripts corrigidos em benchmarks/
+% (benchmark_onda.py, benchmark_predador.py: NT=200, N_RUNS=100).
+% FALTA: re-medir os TEMPOS dos 6 casos juntos na maquina de referencia (i7-14700K)
+% e preencher as colunas "---" das duas linhas novas.
 
 Com esquemas temporais de mesma ordem, a acurácia é \textbf{equivalente} entre as três bibliotecas: o py-pde obtém o menor RMSE nos dois casos de difusão pura, o PDESolver em advecção-difusão (três vezes melhor que o FiPy/CN, diferença atribuível ao tratamento convectivo em volumes finitos) e o FiPy/CN em Burgers. O tempo de execução, por outro lado, difere sistematicamente: o melhor método do PDESolver é 113, 55, 120 e 65 vezes mais rápido que o FiPy/CN nos quatro casos, respectivamente.
 
