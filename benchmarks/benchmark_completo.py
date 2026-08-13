@@ -38,6 +38,7 @@ import time
 import warnings
 
 import matplotlib
+
 matplotlib.use('Agg')
 import numpy as np
 
@@ -49,9 +50,15 @@ from pdesolver import PDE, PDES
 
 try:
     import fipy
-    from fipy import (CellVariable, CentralDifferenceConvectionTerm,
-                      DiffusionTerm, Grid1D, Grid2D, ImplicitSourceTerm,
-                      TransientTerm)
+    from fipy import (
+        CellVariable,
+        CentralDifferenceConvectionTerm,
+        DiffusionTerm,
+        Grid1D,
+        Grid2D,
+        ImplicitSourceTerm,
+        TransientTerm,
+    )
     from fipy.tools import numerix
     TEM_FIPY = True
 except ImportError:

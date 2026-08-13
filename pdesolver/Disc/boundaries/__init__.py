@@ -4,7 +4,6 @@ from .neumann import NeumannBC
 from .periodic import PeriodicBC
 from .robin import RobinBC
 
-
 BOUNDARY_REGISTRY: dict[str, type[BoundaryCondition]] = {
     "dirichlet": DirichletBC,
     "neumann": NeumannBC,

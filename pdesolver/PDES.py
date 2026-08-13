@@ -1,6 +1,7 @@
 import json
 
 import matplotlib
+
 if matplotlib.get_backend().lower() == "agg":
     try:
         matplotlib.use("TkAgg")
@@ -9,19 +10,24 @@ if matplotlib.get_backend().lower() == "agg":
 import numpy as np
 import sympy as sp
 
-from .Solvers import RKF as SERKF45
+from .Analysis import (
+    analyze,
+    modified_equation,
+    operator_terms,
+    report_text,
+    stability_limit,
+)
 from .Auxs.PDESEncoder import PDESEncoder
 from .Auxs.Visualize import visualize as _visualize
 from .Disc.Disc import df, periodic_axes
 from .Disc.grid import build_grid
 from .Disc.stencil import StencilOperator
 from .PDE import PDE
+from .Solvers import RKF as SERKF45
 from .Solvers.bdf2 import bdf2
 from .Solvers.CN import cn
 from .Solvers.imex import imex
 from .Solvers.solver_base import detect_linearity_symbolic
-from .Analysis import analyze, modified_equation, operator_terms, report_text
-from .Analysis import stability_limit
 
 
 class PDES:

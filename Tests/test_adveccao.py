@@ -1,13 +1,15 @@
-import numpy as np
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import pytest
+
 from pdesolver import PDE, PDES
 
 DISC_N  = [15, 15]
 TF      = 1.0
 NT      = 200
-TOL_MAE = 1e-2  
+TOL_MAE = 1e-2
 NU      = 0.1
 CX      = 1.0
 CY      = 1.0

@@ -1,5 +1,5 @@
-import numpy as np
 import matplotlib
+import numpy as np
 
 
 def _select_backend():

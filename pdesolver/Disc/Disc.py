@@ -1,5 +1,6 @@
-from typing import List, Tuple
 import re
+from typing import List, Tuple
+
 from ..Auxs.FuncAux import repl_symbol as _repl_symbol
 from .boundaries import get_boundary
 from .grid import build_grid

@@ -4,10 +4,12 @@ import os
 import tempfile
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import numpy as np
 import pytest
+
 from pdesolver import PDE, PDES
 
 

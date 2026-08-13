@@ -1,5 +1,6 @@
 
 from typing import List
+
 from ...Auxs.FuncAux import repl_symbol as _repl_symbol
 from .boundary_base import BoundaryCondition
 
