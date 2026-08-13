@@ -1,7 +1,4 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
 
 from pdesolver import PDE, PDES
@@ -11,7 +8,7 @@ U0, UL = 1.0, 0.0
 U_INT = (K1 * U0 / A + K2 * UL / (1 - A)) / (K1 / A + K2 / (1 - A))
 
 
-def calor_2d(n=31):
+def pde_calor2d():
     return PDE(
         'dU/dt = 0.2*d2U/dx2 + 0.2*d2U/dy2',
         'U', ['x', 'y'], ['t'],
@@ -26,7 +23,7 @@ def calor_2d(n=31):
 
 def test_obstaculo_permanece_congelado():
     n = 31
-    sim = PDES([calor_2d()], [n, n])
+    sim = PDES([pde_calor2d()], [n, n])
     X, Y = sim.grid.coords()
     bloco = (np.abs(X - 0.5) < 0.12) & (np.abs(Y - 0.5) < 0.12)
     sim.discretize(method='central',
@@ -39,14 +36,14 @@ def test_obstaculo_permanece_congelado():
 
 def test_mascara_por_callable_equivale_a_array():
     n = 31
-    a = PDES([calor_2d()], [n, n])
+    a = PDES([pde_calor2d()], [n, n])
     X, Y = a.grid.coords()
     bloco = (np.abs(X - 0.5) < 0.12) & (np.abs(Y - 0.5) < 0.12)
     a.discretize(method='central',
                  regions=[{'where': bloco, 'eq': 'dU/dt = 0'}])
     a.solve(method='bdf2', tf=0.1, nt=50)
 
-    b = PDES([calor_2d()], [n, n])
+    b = PDES([pde_calor2d()], [n, n])
     b.discretize(method='central', regions=[{
         'where': lambda X, Y: (np.abs(X - 0.5) < 0.12) & (np.abs(Y - 0.5) < 0.12),
         'eq': 'dU/dt = 0',
@@ -118,11 +115,11 @@ def test_fonte_pontual():
 
 def test_regiao_nao_altera_nos_fora_dela():
     n = 31
-    base = PDES([calor_2d()], [n, n])
+    base = PDES([pde_calor2d()], [n, n])
     base.discretize(method='central')
     base.solve(method='bdf2', tf=0.1, nt=50)
 
-    vazia = PDES([calor_2d()], [n, n])
+    vazia = PDES([pde_calor2d()], [n, n])
     X, Y = vazia.grid.coords()
     vazia.discretize(method='central', regions=[
         {'where': np.zeros_like(X, dtype=bool), 'eq': 'dU/dt = 0'},
@@ -136,7 +133,7 @@ def test_regiao_nao_altera_nos_fora_dela():
 
 def test_stencil_recusa_regioes():
     n = 21
-    sim = PDES([calor_2d()], [n, n], backend='stencil')
+    sim = PDES([pde_calor2d()], [n, n], backend='stencil')
     X, Y = sim.grid.coords()
     with pytest.raises(ValueError, match="backend='symbolic'"):
         sim.discretize(method='central', regions=[
@@ -145,13 +142,13 @@ def test_stencil_recusa_regioes():
 
 
 def test_regiao_exige_chaves():
-    sim = PDES([calor_2d()], [21, 21])
+    sim = PDES([pde_calor2d()], [21, 21])
     with pytest.raises(ValueError, match="'where'"):
         sim.discretize(method='central', regions=[{'eq': 'dU/dt = 0'}])
 
 
 def test_mascara_com_forma_errada_rejeitada():
-    sim = PDES([calor_2d()], [21, 21])
+    sim = PDES([pde_calor2d()], [21, 21])
     with pytest.raises(ValueError, match='forma'):
         sim.discretize(method='central', regions=[
             {'where': np.zeros((5, 5), dtype=bool), 'eq': 'dU/dt = 0'},

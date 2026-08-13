@@ -1,9 +1,6 @@
 import math
 
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
 import sympy as sp
 
@@ -21,7 +18,7 @@ NU    = 0.01
 N_1D  = 51
 
 
-def calor_2d(n=64, mesh='uniform'):
+def sim_calor2d(n=64, mesh='uniform'):
     pde = PDE(
         'dF/dt = 0.1*d2F/dx2 + 0.2*d2F/dy2',
         'F', ['x', 'y'], ['t'],
@@ -85,7 +82,7 @@ def test_limite_no_eixo_real():
 
 
 def test_simbolico_e_espectral_concordam():
-    sim = calor_2d(n=48)
+    sim = sim_calor2d(n=48)
     est = sim.analyze(method='RKF', verbose=False)['stability']
     razao = est['dt_max'] / est['dt_max_spectral']
     assert 0.9 < razao < 1.1, (
@@ -95,7 +92,7 @@ def test_simbolico_e_espectral_concordam():
 
 
 def test_dt_previsto_tem_a_ordem_do_passo_real():
-    sim = calor_2d(n=64)
+    sim = sim_calor2d(n=64)
     previsto = sim.stability_limit(method='RKF')
 
     import contextlib
@@ -113,7 +110,7 @@ def test_dt_previsto_tem_a_ordem_do_passo_real():
 
 
 def test_metodos_implicitos_sao_incondicionais():
-    sim = calor_2d(n=32)
+    sim = sim_calor2d(n=32)
     for metodo in ('bdf2', 'CN'):
         est = sim.analyze(method=metodo, verbose=False)['stability']
         assert est['unconditional']
@@ -199,7 +196,7 @@ def test_analise_funciona_sem_discretizar():
 
 
 def test_espectro_do_simbolo_e_estavel_para_difusao():
-    sim = calor_2d(n=32)
+    sim = sim_calor2d(n=32)
     lams, linear = symbol_eigenvalues(sim.operator, nk=24)
     assert linear
     assert np.max(lams.real) <= 1e-9, "difusão pura não deve ter modo crescente"
