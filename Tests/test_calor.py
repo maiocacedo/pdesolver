@@ -1,9 +1,6 @@
 
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
-import pytest
+from _helpers import mae
 
 from pdesolver import PDE, PDES
 
@@ -20,11 +17,8 @@ X, Y = np.meshgrid(x, y, indexing='ij')
 
 
 def solucao_analitica(X, Y, t):
-    return np.sin(np.pi * X) * np.sin(np.pi * Y) * np.exp(-(ALPHA_X + ALPHA_Y) * np.pi**2 * t)
-
-
-def mae(numerica, analitica):
-    return np.mean(np.abs(np.array(numerica) - analitica.flatten()))
+    return (np.sin(np.pi * X) * np.sin(np.pi * Y)
+            * np.exp(-(ALPHA_X + ALPHA_Y) * np.pi**2 * t))
 
 
 def montar_sistema():

@@ -1,8 +1,6 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
+from _helpers import mae
 
 from pdesolver import PDE, PDES
 
@@ -17,10 +15,6 @@ DISC_2D = [32, 32]
 TF_2D   = 0.5
 NT_2D   = 200
 TOL_2D  = 1e-3
-
-
-def mae(numerica, analitica):
-    return np.mean(np.abs(np.array(numerica) - analitica))
 
 
 def montar_adveccao():

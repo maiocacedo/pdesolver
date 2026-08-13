@@ -1,12 +1,5 @@
 """Tests for JSON save/load round-trip functionality."""
 
-import os
-import tempfile
-
-import matplotlib
-
-matplotlib.use("Agg")
-
 import numpy as np
 import pytest
 

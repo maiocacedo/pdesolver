@@ -1,17 +1,11 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
+from _helpers import mae
 
 from pdesolver import PDE, PDES
 
 TF = 0.1
 NT = 200
-
-
-def mae(numerica, analitica):
-    return np.mean(np.abs(np.array(numerica) - analitica))
 
 
 def test_dominio_nao_unitario_1d():

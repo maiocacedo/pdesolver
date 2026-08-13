@@ -1,8 +1,6 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
+from _helpers import mae
 
 from pdesolver import PDE, PDES
 
@@ -15,10 +13,6 @@ NT_LAYER = 600
 TF   = 0.1
 NT   = 200
 ALFA = 1.0
-
-
-def mae(numerica, analitica):
-    return np.mean(np.abs(np.array(numerica) - analitica))
 
 
 def camada_limite(mesh):

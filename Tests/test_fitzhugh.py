@@ -1,9 +1,4 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
-import warnings
-
 import pytest
 
 from pdesolver import PDE, PDES

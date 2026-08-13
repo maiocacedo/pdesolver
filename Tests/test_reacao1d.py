@@ -1,7 +1,4 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
 
 from pdesolver import PDE, PDES
@@ -46,8 +43,10 @@ def test_valores_positivos(resultado):
     _, hist = resultado.results
     C_final = np.array(hist[0][-1])
     D_final = np.array(hist[1][-1])
-    assert np.all(C_final >= -1e-10), f"C contém valores negativos: min={C_final.min():.2e}"
-    assert np.all(D_final >= -1e-10), f"D contém valores negativos: min={D_final.min():.2e}"
+    assert np.all(C_final >= -1e-10), \
+        f"C contém valores negativos: min={C_final.min():.2e}"
+    assert np.all(D_final >= -1e-10), \
+        f"D contém valores negativos: min={D_final.min():.2e}"
 
 
 def test_conservacao_massa(resultado):

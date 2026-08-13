@@ -1,8 +1,5 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
-import pytest
+from _helpers import mae
 
 from pdesolver import PDE, PDES
 
@@ -23,10 +20,6 @@ def solucao_analitica(X, Y, t):
     return (np.exp(-2 * NU * np.pi**2 * t)
             * np.sin(np.pi * (X - CX * t))
             * np.sin(np.pi * (Y - CY * t)))
-
-
-def mae(numerica, analitica):
-    return np.mean(np.abs(np.array(numerica) - analitica.flatten()))
 
 
 def montar_sistema():
