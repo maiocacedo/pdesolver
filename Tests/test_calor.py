@@ -1,8 +1,10 @@
 
-import numpy as np
 import matplotlib
-matplotlib.use('Agg') 
+import numpy as np
+
+matplotlib.use('Agg')
 import pytest
+
 from pdesolver import PDE, PDES
 
 DISC_N   = [15, 15]

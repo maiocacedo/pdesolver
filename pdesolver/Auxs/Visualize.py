@@ -1,5 +1,5 @@
-import numpy as np
 import matplotlib
+import numpy as np
 
 
 def _select_backend():
@@ -57,10 +57,7 @@ def visualize(pdes_obj, mode='heatmap', func_idx=0, time_step=-1, **kwargs):
                   f"Use: 'plot1d', 'plot1d_all', 'heatmap1d', 'animation1d'.")
         return
 
-    nx, ny = pdes_obj.disc_n
-    x = np.linspace(0, 1, nx)
-    y = np.linspace(0, 1, ny)
-    X, Y = np.meshgrid(x, y, indexing='ij')
+    X, Y = pdes_obj.grid.coords()
 
     if mode == 'heatmap':
         plot_heatmap(historico, X, Y, pdes_obj.funcs, pdes_obj.disc_n, func_idx, time_step)
@@ -80,8 +77,7 @@ def _is_1d(pdes_obj):
 
 
 def _get_x1d(pdes_obj):
-    a, b = pdes_obj.pdes[0].ivar_boundary[0]
-    return np.linspace(a, b, pdes_obj.disc_n[0])
+    return pdes_obj.grid.axes[0].nodes
 
 
 def plot1d(historico, x, funcs, func_idx, time_step, **kwargs):

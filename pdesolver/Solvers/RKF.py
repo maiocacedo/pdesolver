@@ -8,7 +8,42 @@ import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 
+from ..Auxs.FuncAux import build_func_map as _build_func_map
 from ..Auxs.FuncAux import symbol_references
+from ..Disc.stencil import group_constraints
+
+_dll_dirs = []
+
+
+def _add_cuda_dll_dirs():
+    if sys.platform != "win32":
+        return
+    try:
+        import site
+
+        roots = list(site.getsitepackages())
+        try:
+            roots.append(site.getusersitepackages())
+        except Exception:
+            pass
+
+        for root in roots:
+            nvidia = os.path.join(root, "nvidia")
+            if not os.path.isdir(nvidia):
+                continue
+            for sub in sorted(os.listdir(nvidia)):
+                bin_dir = os.path.join(nvidia, sub, "bin")
+                if not os.path.isdir(bin_dir):
+                    continue
+                if bin_dir in os.environ.get("PATH", ""):
+                    continue
+                os.environ["PATH"] = bin_dir + os.pathsep + os.environ["PATH"]
+                _dll_dirs.append(os.add_dll_directory(bin_dir))
+    except Exception:
+        pass
+
+
+_add_cuda_dll_dirs()
 
 
 def _fix_cupy_path():
@@ -70,7 +105,22 @@ def _fix_cupy_path():
 
 _fix_cupy_path()
 
-_GPU_THRESHOLD = 10000
+_GPU_THRESHOLD = 65536
+
+RKF45_C = (0.0, 1 / 4, 3 / 8, 12 / 13, 1.0, 1 / 2)
+
+RKF45_A = (
+    (),
+    (1 / 4,),
+    (3 / 32, 9 / 32),
+    (1932 / 2197, -7200 / 2197, 7296 / 2197),
+    (439 / 216, -8.0, 3680 / 513, -845 / 4104),
+    (-8 / 27, 2.0, -3544 / 2565, 1859 / 4104, -11 / 40),
+)
+
+RKF45_B5 = (16 / 135, 0.0, 6656 / 12825, 28561 / 56430, -9 / 50, 2 / 55)
+
+RKF45_B4 = (25 / 216, 0.0, 1408 / 2565, 2197 / 4104, -1 / 5, 0.0)
 
 try:
     import warnings as _w
@@ -90,30 +140,10 @@ except Exception:
     _CUPY_AVAILABLE = False
 
 
-def _build_func_map(xp):
-    return {
-        "sin": xp.sin,
-        "cos": xp.cos,
-        "tan": xp.tan,
-        "asin": xp.arcsin,
-        "acos": xp.arccos,
-        "atan": xp.arctan,
-        "atan2": xp.arctan2,
-        "sinh": xp.sinh,
-        "cosh": xp.cosh,
-        "tanh": xp.tanh,
-        "exp": xp.exp,
-        "log": xp.log,
-        "sqrt": xp.sqrt,
-        "Abs": xp.abs,
-        "sign": xp.sign,
-        "Max": xp.maximum,
-        "Min": xp.minimum,
-        "mod": xp.mod,
-        "floor": xp.floor,
-        "ceil": xp.ceil,
-        "sech": lambda x: 1.0 / xp.cosh(x),
-    }
+def select_array_module(size):
+    if _CUPY_AVAILABLE and size >= _GPU_THRESHOLD:
+        return cp
+    return np
 
 
 def natural_sort_key(s):
@@ -157,6 +187,7 @@ def SERKF45_cuda(
     neumann_constraints=None,
     save_every=None,
     verbose=False,
+    operator=None,
 ):
     if rtol is None:
         rtol = tol
@@ -164,10 +195,7 @@ def SERKF45_cuda(
     dirichlet_constraints = dirichlet_constraints or {}
     neumann_constraints = neumann_constraints or {}
 
-    dirichlet_lambdas = {
-        idx: _make_bc_lambda(info["expr"])
-        for idx, info in dirichlet_constraints.items()
-    }
+    dirichlet_groups = group_constraints(dirichlet_constraints)
     neumann_lambdas = {
         idx: _make_bc_lambda(info["expr"]) for idx, info in neumann_constraints.items()
     }
@@ -194,8 +222,11 @@ def SERKF45_cuda(
             )
 
     def _apply_dirichlet_gpu(y_gpu, t_val):
-        for idx, info in dirichlet_constraints.items():
-            y_gpu[idx] = float(dirichlet_lambdas[idx](t_val, info["x"], info["y"]))
+        for f, idxs, xs, ys in dirichlet_groups:
+            vals = np.broadcast_to(
+                np.asarray(f(t_val, xs, ys), dtype=np.float64), idxs.shape
+            )
+            y_gpu[_xp.asarray(idxs)] = _xp.asarray(vals)
 
     def _apply_neumann_gpu(y_gpu, t_val):
         if h_neumann is None:
@@ -211,43 +242,52 @@ def SERKF45_cuda(
         _apply_dirichlet_gpu(y_gpu, t_val)
         _apply_neumann_gpu(y_gpu, t_val)
 
-    olddvar = sorted(symbol_references(funcs), key=natural_sort_key)
-    oldivar = symbol_references(ivar)
-    sym_map = {name: sp.Symbol(name) for name in (oldivar + olddvar)}
-    t_sym = sym_map[oldivar[0]]
-    y_syms = [sym_map[name] for name in olddvar]
+    if operator is not None:
+        m = operator.size
+        _xp = operator.xp
+        _mode = "GPU" if _xp is not np else "CPU"
+        dtype = _xp.float64
+        F_all = operator
+    else:
+        olddvar = sorted(symbol_references(funcs), key=natural_sort_key)
+        oldivar = symbol_references(ivar)
+        sym_map = {name: sp.Symbol(name) for name in (oldivar + olddvar)}
+        t_sym = sym_map[oldivar[0]]
+        y_syms = [sym_map[name] for name in olddvar]
 
-    exprs = [parse_expr(e, local_dict=sym_map, evaluate=False) for e in oldexpr]
-    m = len(exprs)
-    if m == 0:
-        raise ValueError("Lista de EDOs vazia.")
+        exprs = [
+            parse_expr(e, local_dict=sym_map, evaluate=False) for e in oldexpr
+        ]
+        m = len(exprs)
+        if m == 0:
+            raise ValueError("Lista de EDOs vazia.")
+
+        if _CUPY_AVAILABLE and m >= _GPU_THRESHOLD:
+            _xp = cp
+            _mode = "GPU"
+        else:
+            _xp = np
+            _mode = "CPU"
+
+        dtype = _xp.float64
+
+        F_tuple = sp.lambdify(
+            (t_sym, *y_syms),
+            tuple(exprs),
+            modules=[_build_func_map(_xp), _xp],
+        )
+
+        _out_buf = _xp.empty(m, dtype=dtype)
+
+        def F_all(t_scalar, y_vec):
+            out = F_tuple(t_scalar, *[y_vec[k] for k in range(m)])
+            for k in range(m):
+                _out_buf[k] = out[k]
+            return _out_buf
 
     use_history = n_funcs and (m % n_funcs == 0)
     n_elements = (m // n_funcs) if use_history else m
     final_list = [[] for _ in range(n_funcs)] if use_history else []
-
-    if _CUPY_AVAILABLE and m >= _GPU_THRESHOLD:
-        _xp = cp
-        _mode = "GPU"
-    else:
-        _xp = np
-        _mode = "CPU"
-
-    dtype = _xp.float64
-
-    F_tuple = sp.lambdify(
-        (t_sym, *y_syms),
-        tuple(exprs),
-        modules=[_build_func_map(_xp), _xp],
-    )
-
-    _out_buf = _xp.empty(m, dtype=dtype)
-
-    def F_all(t_scalar, y_vec):
-        out = F_tuple(t_scalar, *[y_vec[k] for k in range(m)])
-        for k in range(m):
-            _out_buf[k] = out[k]
-        return _out_buf
 
     def _to_numpy(arr):
         if _mode == "GPU":
@@ -290,14 +330,16 @@ def SERKF45_cuda(
     t1 = dtype(float(xn))
     h = clamp_h(h, t, t1, dt_max)
 
-    c2, c3, c4, c5, c6 = 1 / 4, 3 / 8, 12 / 13, 1.0, 1 / 2
-    a21 = 1 / 4
-    a31, a32 = 3 / 32, 9 / 32
-    a41, a42, a43 = 1932 / 2197, -7200 / 2197, 7296 / 2197
-    a51, a52, a53, a54 = 439 / 216, -8.0, 3680 / 513, -845 / 4104
-    a61, a62, a63, a64, a65 = -8 / 27, 2.0, -3544 / 2565, 1859 / 4104, -11 / 40
-    b1, b3, b4, b5, b6 = 16 / 135, 6656 / 12825, 28561 / 56430, -9 / 50, 2 / 55
-    b1s, b3s, b4s, b5s = 25 / 216, 1408 / 2565, 2197 / 4104, -1 / 5
+    c2, c3, c4, c5, c6 = RKF45_C[1:]
+    a21 = RKF45_A[1][0]
+    a31, a32 = RKF45_A[2][:2]
+    a41, a42, a43 = RKF45_A[3][:3]
+    a51, a52, a53, a54 = RKF45_A[4][:4]
+    a61, a62, a63, a64, a65 = RKF45_A[5][:5]
+    b1, b3, b4, b5, b6 = (RKF45_B5[0], RKF45_B5[2], RKF45_B5[3],
+                          RKF45_B5[4], RKF45_B5[5])
+    b1s, b3s, b4s, b5s = (RKF45_B4[0], RKF45_B4[2], RKF45_B4[3],
+                          RKF45_B4[4])
 
     k1 = _xp.empty(m, dtype=dtype)
     k2 = _xp.empty(m, dtype=dtype)

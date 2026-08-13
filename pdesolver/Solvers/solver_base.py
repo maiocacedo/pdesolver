@@ -1,11 +1,13 @@
 import re
 import time
 import warnings
+
 import numpy as np
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
 import scipy.sparse as sp_sparse
+import sympy as sp
 from scipy.sparse.linalg import spsolve
+from sympy.parsing.sympy_parser import parse_expr
+
 
 def compile_equations(flat_list, d_vars, verbose=False, use_cse=True):
     t0 = time.time()
@@ -97,11 +99,47 @@ def detect_linearity_symbolic(pde_eqs, func_names, sp_vars, verbose=False):
             print(f"  Detecção simbólica falhou ({e}) — caindo para numérica.")
         return None
 
+class ColoredJacobian:
+    __slots__ = ('indices', 'indptr', 'rows', 'nnz_color', 'cols_by_color',
+                 'n_colors', 'n', 'nnz')
+
+    def __init__(self, pattern, colors, n_colors):
+        csc = pattern.tocsc()
+        self.n = pattern.shape[0]
+        self.nnz = csc.indices.size
+        self.indices = csc.indices.copy()
+        self.indptr = csc.indptr.copy()
+        self.rows = csc.indices
+        all_cols = np.repeat(np.arange(self.n), np.diff(csc.indptr))
+        self.nnz_color = colors[all_cols]
+        self.n_colors = int(n_colors)
+        self.cols_by_color = [
+            np.where(colors == c)[0] for c in range(self.n_colors)
+        ]
+
+    def build(self, funcs, u_k, t_val, eps=1e-6):
+        F_k = eval_F(funcs, t_val, u_k)
+        vals = np.zeros(self.nnz, dtype=np.float64)
+        for c in range(self.n_colors):
+            cols_c = self.cols_by_color[c]
+            if cols_c.size == 0:
+                continue
+            u_pert = u_k.copy()
+            u_pert[cols_c] += eps
+            dF = (eval_F(funcs, t_val, u_pert) - F_k) / eps
+            mask = self.nnz_color == c
+            vals[mask] = dF[self.rows[mask]]
+        J = sp_sparse.csc_matrix(
+            (vals, self.indices, self.indptr), shape=(self.n, self.n)
+        ).tocsr()
+        return J, F_k
+
+
 def detect_linearity(funcs, n, t0_val=0.0, verbose=False,
-                     dirichlet_indices=None):
+                     dirichlet_indices=None, jac=None):
     t0 = time.time()
     zeros = np.zeros(n)
-    L0, fonte = _extract_L(funcs, n, zeros, t0_val)
+    L0, fonte = _extract_L(funcs, n, zeros, t0_val, jac=jac)
     F0 = fonte
     rng = np.random.default_rng(42)
     is_linear = True
@@ -122,9 +160,12 @@ def detect_linearity(funcs, n, t0_val=0.0, verbose=False,
     return is_linear, L0
 
 
-def _extract_L(funcs, n, u_ref, t_val, eps=1e-6):
-    F_ref = eval_F(funcs, t_val, u_ref)
+def _extract_L(funcs, n, u_ref, t_val, eps=1e-6, jac=None):
     fonte = eval_F(funcs, t_val, np.zeros(n))
+    if jac is not None:
+        L, _ = jac.build(funcs, u_ref, t_val, eps=eps)
+        return L, fonte
+    F_ref = eval_F(funcs, t_val, u_ref)
     rows_all, cols_all, vals_all = [], [], []
     for j in range(n):
         u_pert = u_ref.copy()
@@ -141,10 +182,11 @@ def _extract_L(funcs, n, u_ref, t_val, eps=1e-6):
     return L, fonte
 
 
-def extract_linear_structure(funcs, n, t0_val=0.0, verbose=False, L=None):
+def extract_linear_structure(funcs, n, t0_val=0.0, verbose=False, L=None,
+                             jac=None):
     t0 = time.time()
     if L is None:
-        L, _ = _extract_L(funcs, n, np.zeros(n), t0_val)
+        L, _ = _extract_L(funcs, n, np.zeros(n), t0_val, jac=jac)
     z = np.zeros(n)
     F0 = eval_F(funcs, 0.0, z)
     F1 = eval_F(funcs, 1.0, z)
@@ -198,56 +240,37 @@ def _detect_sparsity_pattern(funcs, n, t_val=0.0, eps=1e-6):
     return sparsity, colors, n_colors
 
 
-def _jacobian_sparse_colored(funcs, n, u_k, t_val, sparsity, colors, n_colors,
-                              eps=1e-6, _csc_cache={}):
-    F_k = eval_F(funcs, t_val, u_k)
-    sp_id = id(sparsity)
-    if sp_id not in _csc_cache:
-        sp_csc = sparsity.tocsc()
-        col_rows = [sp_csc.indices[sp_csc.indptr[j]:sp_csc.indptr[j+1]]
-                    for j in range(n)]
-        _csc_cache[sp_id] = col_rows
-    else:
-        col_rows = _csc_cache[sp_id]
-    all_rows = np.empty(sparsity.nnz, dtype=np.int32)
-    all_cols = np.empty(sparsity.nnz, dtype=np.int32)
-    all_vals = np.empty(sparsity.nnz, dtype=np.float64)
-    ptr = 0
-    for c in range(n_colors):
-        cols_c = np.where(colors == c)[0]
-        u_pert = u_k.copy()
-        u_pert[cols_c] += eps
-        F_pert = eval_F(funcs, t_val, u_pert)
-        dF = (F_pert - F_k) / eps
-        for j in cols_c:
-            rows_j = col_rows[j]
-            k = len(rows_j)
-            if k == 0:
-                continue
-            all_rows[ptr:ptr+k] = rows_j
-            all_cols[ptr:ptr+k] = j
-            all_vals[ptr:ptr+k] = dF[rows_j]
-            ptr += k
-    J_F = sp_sparse.csr_matrix(
-        (all_vals[:ptr], (all_rows[:ptr], all_cols[:ptr])), shape=(n, n)
-    )
-    return J_F, F_k
-
-
 def eval_F(funcs, t_val, u):
     if callable(funcs) and not isinstance(funcs, list):
         return funcs(t_val, u)
     return np.array([f(float(t_val), *u) for f in funcs], dtype=np.float64)
 
+def impose_dirichlet(vec, t_val, groups):
+    for f, idxs, xs, ys in groups:
+        vals = np.asarray(f(t_val, xs, ys), dtype=np.float64)
+        vec[idxs] = np.broadcast_to(vals, idxs.shape)
+    return vec
+
+
+def _dirichlet_residual(G, u_k, t_val, groups):
+    for f, idxs, xs, ys in groups:
+        vals = np.asarray(f(t_val, xs, ys), dtype=np.float64)
+        G[idxs] = u_k[idxs] - np.broadcast_to(vals, idxs.shape)
+    return G
+
+
 def picard_step(funcs, u, t_new, dt, n, rhs_hist,
-                alpha, max_iter=50, tol_nl=1e-8, verbose=False):
+                alpha, max_iter=50, tol_nl=1e-8, verbose=False, jac=None,
+                dirichlet_groups=None):
     I = sp_sparse.eye(n, format='csr')
     u_k = u.copy()
     for k in range(max_iter):
-        L_k, _ = _extract_L(funcs, n, u_k, t_new)
+        L_k, _ = _extract_L(funcs, n, u_k, t_new, jac=jac)
         fonte_k = eval_F(funcs, t_new, np.zeros(n))
         A = I - alpha * dt * L_k
         b = rhs_hist + alpha * dt * fonte_k
+        if dirichlet_groups:
+            impose_dirichlet(b, t_new, dirichlet_groups)
         u_new = spsolve(A, b)
         res = np.linalg.norm(u_new - u_k)
         if verbose:
@@ -261,23 +284,26 @@ def picard_step(funcs, u, t_new, dt, n, rhs_hist,
 
 def newton_step(funcs, u, t_new, dt, n, rhs_hist,
                 alpha, max_iter=20, tol_nl=1e-8, eps=1e-6, verbose=False,
-                _cache={}):
-    if n not in _cache:
-        t_cache = time.time()
-        sparsity, colors, n_colors = _detect_sparsity_pattern(funcs, n, eps=eps)
-        _cache[n] = (sparsity, colors, n_colors)
-        if verbose:
-            print(f"  [Newton] Esparsidade detectada: {sparsity.nnz} entradas não-nulas, "
-                  f"{n_colors} cores (vs {n} colunas) — {time.time()-t_cache:.3f}s")
-    else:
-        sparsity, colors, n_colors = _cache[n]
+                jac=None, dirichlet_groups=None, _cache={}):
+    if jac is None:
+        if n not in _cache:
+            t_cache = time.time()
+            pattern, colors, n_colors = _detect_sparsity_pattern(
+                funcs, n, eps=eps
+            )
+            _cache[n] = ColoredJacobian(pattern, colors, n_colors)
+            if verbose:
+                print(f"  [Newton] Esparsidade detectada: {pattern.nnz} "
+                      f"entradas não-nulas, {n_colors} cores (vs {n} "
+                      f"colunas) — {time.time()-t_cache:.3f}s")
+        jac = _cache[n]
     I = sp_sparse.eye(n, format='csr')
     u_k = u.copy()
     for k in range(max_iter):
-        J_F, F_k = _jacobian_sparse_colored(
-            funcs, n, u_k, t_new, sparsity, colors, n_colors, eps=eps
-        )
+        J_F, F_k = jac.build(funcs, u_k, t_new, eps=eps)
         G_k = u_k - alpha * dt * F_k - rhs_hist
+        if dirichlet_groups:
+            _dirichlet_residual(G_k, u_k, t_new, dirichlet_groups)
         res = np.linalg.norm(G_k)
         if verbose:
             print(f"    Newton iter {k+1}: ||G|| = {res:.2e}")

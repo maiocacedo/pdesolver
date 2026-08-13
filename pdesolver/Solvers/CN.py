@@ -1,14 +1,23 @@
 import time
-import numpy as np
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
-import scipy.sparse as sp_sparse
-from scipy.sparse.linalg import spsolve, splu
 
+import numpy as np
+import scipy.sparse as sp_sparse
+import sympy as sp
+from scipy.sparse.linalg import splu, spsolve
+from sympy.parsing.sympy_parser import parse_expr
+
+from ..Disc.stencil import group_constraints
 from .solver_base import (
-    compile_equations, extract_linear_structure, detect_linearity,
-    eval_F, picard_step, newton_step,
-    make_history, save_to_history,
+    ColoredJacobian,
+    compile_equations,
+    detect_linearity,
+    eval_F,
+    extract_linear_structure,
+    impose_dirichlet,
+    make_history,
+    newton_step,
+    picard_step,
+    save_to_history,
 )
 
 
@@ -23,9 +32,10 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
        dirichlet_constraints=None,
        neumann_constraints=None,
        verbose=False,
-       is_linear=None):
+       is_linear=None,
+       operator=None):
     dt = tf / nt
-    n  = len(d_vars)
+    n  = operator.size if operator is not None else len(d_vars)
     u  = np.array(ic, dtype=np.float64).flatten()
 
     dirichlet_constraints = dirichlet_constraints or {}
@@ -35,6 +45,7 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
         idx: _make_bc_lambda(info['expr'])
         for idx, info in dirichlet_constraints.items()
     }
+    dirichlet_groups = group_constraints(dirichlet_constraints)
     neumann_lambdas = {
         idx: _make_bc_lambda(info['expr'])
         for idx, info in neumann_constraints.items()
@@ -86,19 +97,29 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
 
     final_list, use_groups, n_elements = make_history(n_funcs, n)
 
-    funcs = compile_equations(flat_list, d_vars, verbose=verbose)
+    if operator is not None:
+        funcs = operator
+        jac = ColoredJacobian(*operator.sparsity())
+        if verbose:
+            print(f"  [CN] Esparsidade analítica: {jac.nnz} entradas "
+                  f"não-nulas, {jac.n_colors} cores (vs {n} colunas)")
+    else:
+        funcs = compile_equations(flat_list, d_vars, verbose=verbose)
+        jac = None
 
     overwrite_indices = list(dirichlet_constraints.keys()) + list(neumann_constraints.keys())
     if is_linear is None:
         is_linear, L = detect_linearity(funcs, n, verbose=verbose,
-                                        dirichlet_indices=overwrite_indices)
+                                        dirichlet_indices=overwrite_indices,
+                                        jac=jac)
     else:
         L = None
 
     I = sp_sparse.eye(n, format='csr')
 
     if is_linear:
-        L, fonte_func = extract_linear_structure(funcs, n, verbose=verbose, L=L)
+        L, fonte_func = extract_linear_structure(funcs, n, verbose=verbose,
+                                                 L=L, jac=jac)
         A_impl = I - (dt / 2.0) * L
         A_expl = I + (dt / 2.0) * L
         t_lu = time.time()
@@ -109,7 +130,8 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
         if verbose:
             print(f"  [CN] EDP nao-linear detectada - usando {nonlinear_method.upper()} "
                   f"(tol={tol_nl:.0e}, max_iter={max_iter_nl})")
-        _, fonte_func = extract_linear_structure(funcs, n, verbose=verbose)
+        _, fonte_func = extract_linear_structure(funcs, n, verbose=verbose,
+                                                 jac=jac)
 
     save_to_history(u, final_list, use_groups, n_funcs, n_elements)
 
@@ -124,6 +146,8 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
             f_n  = fonte_func(tempo_atual)
             f_n1 = fonte_func(tempo_proximo)
             rhs  = A_expl.dot(u) + (dt / 2.0) * (f_n + f_n1)
+            if dirichlet_groups:
+                impose_dirichlet(rhs, tempo_proximo, dirichlet_groups)
             u    = lu_impl.solve(rhs)
             u    = _apply_bcs(u, tempo_proximo)
         else:
@@ -134,13 +158,15 @@ def cn(flat_list, d_vars, tf, nt, ic, n_funcs=None,
                 u, n_iter = newton_step(
                     funcs, u, tempo_proximo, dt, n, rhs_hist,
                     alpha=0.5, max_iter=max_iter_nl,
-                    tol_nl=tol_nl, verbose=verbose
+                    tol_nl=tol_nl, verbose=verbose, jac=jac,
+                    dirichlet_groups=dirichlet_groups
                 )
             else:
                 u, n_iter = picard_step(
                     funcs, u, tempo_proximo, dt, n, rhs_hist,
                     alpha=0.5, max_iter=max_iter_nl,
-                    tol_nl=tol_nl, verbose=verbose
+                    tol_nl=tol_nl, verbose=verbose, jac=jac,
+                    dirichlet_groups=dirichlet_groups
                 )
             u = _apply_bcs(u, tempo_proximo)
             total_iters += n_iter
