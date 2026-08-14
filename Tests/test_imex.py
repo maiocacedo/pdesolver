@@ -1,9 +1,6 @@
 import math
 
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
 import sympy as sp
 

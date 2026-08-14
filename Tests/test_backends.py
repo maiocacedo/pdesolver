@@ -1,7 +1,4 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
 
 from pdesolver import PDE, PDES
@@ -11,7 +8,7 @@ TOL_RHS = 1e-10
 SEED    = 20260801
 
 
-def calor_2d():
+def pdes_calor2d():
     return [PDE(
         'dF/dt = 0.1*d2F/dx2 + 0.2*d2F/dy2',
         'F', ['x', 'y'], ['t'],
@@ -75,13 +72,13 @@ def acoplado_1d():
 
 
 CASOS = [
-    ('calor 2D dirichlet',   calor_2d,    [9, 9],   'uniform', 'central'),
+    ('calor 2D dirichlet',   pdes_calor2d,    [9, 9],   'uniform', 'central'),
     ('burgers 2D',           burgers_2d,  [9, 9],   'uniform', 'backward'),
     ('calor 2D neumann',     neumann_2d,  [9, 9],   'uniform', 'central'),
     ('toro 2D termo misto',  toro_misto,  [9, 9],   'uniform', 'central'),
     ('acoplado 1D',          acoplado_1d, [15],     'uniform', 'backward'),
-    ('nao uniforme 2D',      calor_2d,    [7, 11],  'tanh',    'central'),
-    ('chebyshev 2D',         calor_2d,    [9, 9],   'chebyshev', 'central'),
+    ('nao uniforme 2D',      pdes_calor2d,    [7, 11],  'tanh',    'central'),
+    ('chebyshev 2D',         pdes_calor2d,    [9, 9],   'chebyshev', 'central'),
 ]
 
 
@@ -105,11 +102,11 @@ def test_backends_concordam_no_rhs(nome, fabrica, disc_n, mesh, metodo):
 
 @pytest.mark.parametrize('metodo', ['bdf2', 'CN'])
 def test_backends_concordam_na_solucao(metodo):
-    sim_sym = PDES(calor_2d(), [15, 15])
+    sim_sym = PDES(pdes_calor2d(), [15, 15])
     sim_sym.discretize(method='central')
     sim_sym.solve(method=metodo, tf=1.0, nt=100)
 
-    sim_st = PDES(calor_2d(), [15, 15], backend='stencil')
+    sim_st = PDES(pdes_calor2d(), [15, 15], backend='stencil')
     sim_st.discretize(method='central')
     sim_st.solve(method=metodo, tf=1.0, nt=100)
 
@@ -174,6 +171,6 @@ def test_coloracao_e_valida():
 
 
 def test_backend_invalido_rejeitado():
-    sim = PDES(calor_2d(), [9, 9], backend='vetorial')
+    sim = PDES(pdes_calor2d(), [9, 9], backend='vetorial')
     with pytest.raises(ValueError, match='Backend inválido'):
         sim.discretize(method='central')

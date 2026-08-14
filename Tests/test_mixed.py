@@ -1,8 +1,6 @@
-import matplotlib
 import numpy as np
-
-matplotlib.use('Agg')
 import pytest
+from _helpers import mae
 
 from pdesolver import PDE, PDES
 
@@ -14,10 +12,6 @@ NT   = 200
 
 K = 2 * np.pi
 LAMBDA = (A_XX + 2 * B_XY + C_YY) * K ** 2
-
-
-def mae(numerica, analitica):
-    return np.mean(np.abs(np.array(numerica) - analitica))
 
 
 def montar(n, backend='symbolic'):
